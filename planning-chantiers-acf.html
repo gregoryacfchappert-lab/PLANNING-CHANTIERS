@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planning Chantiers — ACF CHAPPERT</title>
+<style>
+  :root{--bleu:#1b3a8c;--bleu-clair:#e8eefb;--rouge:#e2231a;--gris:#f4f5f7;--bord:#d8dce4;--txt:#1f2733;--muted:#66707e;--vert:#1a9d5a;--orange:#e08a00;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--gris);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.4;}
+  button{font:inherit;cursor:pointer;border:1px solid var(--bord);background:#fff;color:var(--txt);padding:8px 14px;border-radius:8px;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+  button:hover{background:var(--gris);}
+  button.primary{background:var(--bleu);color:#fff;border-color:var(--bleu);font-weight:600;}
+  button.primary:hover{filter:brightness(1.08);}
+  button.rouge{background:var(--rouge);color:#fff;border-color:var(--rouge);}
+  button.small{padding:4px 9px;font-size:12px;border-radius:6px;}
+  button.ghost{background:transparent;}
+  input,textarea,select{font:inherit;color:var(--txt);}
+  /* Nav */
+  .topnav{position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:6px;padding:10px 18px;flex-wrap:wrap;}
+  .topnav .brand{font-weight:800;color:var(--bleu);margin-right:14px;letter-spacing:.3px;}
+  .topnav .brand span{color:var(--rouge);}
+  .topnav .spacer{flex:1;}
+  .navlink{border:none;background:transparent;color:var(--muted);font-weight:600;padding:8px 12px;border-radius:8px;}
+  .navlink.active{background:var(--bleu-clair);color:var(--bleu);}
+  .nav-badge:not(:empty){display:inline-block;min-width:16px;padding:0 5px;margin-left:2px;background:var(--rouge);color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-align:center;}
+  .wrap{max-width:1280px;margin:22px auto;padding:0 18px;}
+  .wrap.wrap-full{max-width:none;}
+  .plan-th-tech{white-space:normal;word-break:break-word;line-height:1.1;}
+  .view{display:none;} .view.active{display:block;}
+  h2.page-h{color:var(--bleu);margin:0 0 4px;} .sub{color:var(--muted);margin:0 0 16px;}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .search{flex:1;min-width:200px;position:relative;}
+  .search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--bord);border-radius:10px;background:#fff;}
+  .search:before{content:"🔎";position:absolute;left:11px;top:9px;opacity:.5;}
+  table.grid{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--bord);border-radius:12px;overflow:hidden;}
+  table.grid th{background:var(--gris);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:11px 14px;}
+  table.grid td{padding:11px 14px;border-top:1px solid var(--bord);}
+  table.grid tr:hover td{background:#fafbfe;}
+  .clic{cursor:pointer;}
+  .empty{text-align:center;color:var(--muted);padding:44px;background:#fff;border:1px dashed var(--bord);border-radius:12px;}
+  .row-act{display:flex;gap:6px;flex-wrap:wrap;}
+  .tag{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600;display:inline-block;}
+  .st{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600;}
+  .st.previsionnel{background:#eef0f3;color:#66707e;} .st.planifie{background:#e7f7ee;color:var(--vert);} .st.termine{background:#e8eefb;color:var(--bleu);}
+  .alert-pill{background:#fff7e8;border:1px solid var(--orange);color:#8a5a00;border-radius:10px;padding:2px 9px;font-size:12px;font-weight:600;}
+  /* Modale */
+  .modal-bg{position:fixed;inset:0;background:rgba(20,28,48,.45);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto;}
+  .modal-bg.open{display:flex;}
+  .modal{background:#fff;width:560px;max-width:100%;border-radius:14px;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal h3{margin:0 0 16px;color:var(--bleu);}
+  .mfield{margin-bottom:11px;} .mfield label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px;}
+  .mfield input,.mfield textarea,.mfield select{width:100%;padding:8px 10px;border:1px solid var(--bord);border-radius:8px;}
+  .mrow{display:flex;gap:12px;} .mrow .mfield{flex:1;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  /* Board mensuel */
+  .month-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;}
+  .month-col{flex:0 0 240px;background:#fff;border:1px solid var(--bord);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+  .month-head{background:var(--bleu);color:#fff;font-weight:700;text-align:center;padding:9px;text-transform:capitalize;}
+  .month-item{padding:8px 10px;border-bottom:1px solid var(--bord);cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;}
+  .month-item:hover{filter:brightness(.97);}
+  .month-item span{font-size:11px;opacity:.85;}
+  .month-foot{margin-top:auto;background:var(--bleu-clair);color:var(--bleu);font-weight:800;text-align:center;padding:9px;font-size:12px;}
+  .propo-head{background:var(--bleu-clair);color:var(--bleu);font-weight:700;padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:13px;}
+  .propo-month{margin-bottom:18px;border:1px solid var(--bord);border-radius:12px;overflow:hidden;background:#fff;}
+  .propo-month-h{background:var(--bleu);color:#fff;font-weight:800;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;}
+  .propo-cap{font-weight:600;font-size:12px;opacity:.95;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi{background:#fff;border:1px solid var(--bord);border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .kpi .kpi-num{font-size:30px;font-weight:800;color:var(--bleu);line-height:1.1;}
+  .kpi .kpi-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
+  .kpi .kpi-sub{font-size:12px;color:var(--muted);margin-top:6px;}
+  .kpi.kpi-warn{background:#fdecec;border-color:#f5c2c2;} .kpi.kpi-warn .kpi-num{color:var(--rouge);}
+  .kpi.kpi-ok{background:#eafaef;border-color:#bfe6cc;} .kpi.kpi-ok .kpi-num{color:#1a7f3c;}
+  .dash-estim{background:#fff;border:1px solid var(--bord);border-radius:14px;padding:18px;}
+  .estim-row{display:flex;gap:14px;flex-wrap:wrap;} .estim-row .mfield{flex:1;min-width:140px;}
+  .estim-out{margin-top:14px;font-size:15px;}
+  .estim-out .big{font-size:20px;font-weight:800;color:var(--bleu);}
+  .level-wrap{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:14px 16px;margin-bottom:18px;}
+  .level-h{font-weight:700;color:var(--bleu);font-size:13px;margin-bottom:10px;}
+  table.level-tbl{width:100%;margin:0;} table.level-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;} table.level-tbl td{font-size:13px;}
+  .level-foot{margin-top:10px;font-weight:700;font-size:13px;}
+  table.propo-tbl{margin:0;width:100%;} table.propo-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;}
+  /* Planning hebdo + bandeau */
+  .plan-layout{display:flex;gap:14px;align-items:flex-start;}
+  .plan-banner{flex:0 0 250px;position:sticky;top:64px;max-height:80vh;overflow:auto;background:#fff;border:1px solid var(--bord);border-radius:12px;padding:10px;}
+  .plan-banner h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--bleu);}
+  .ch-card{border:1px solid var(--bord);border-left-width:5px;border-radius:9px;padding:8px 10px;margin-bottom:8px;cursor:grab;background:#fff;}
+  .ch-card:active{cursor:grabbing;} .ch-card.dragging{opacity:.5;}
+  .ch-card .cc-nom{font-weight:700;} .ch-card .cc-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .ch-card .cc-act{display:flex;gap:6px;margin-top:6px;}
+  .plan-grid-wrap{flex:1;min-width:0;overflow-x:auto;}
+  .plan-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--bord);border-radius:12px;overflow:hidden;table-layout:fixed;}
+  .plan-table th,.plan-table td{border:1px solid var(--bord);vertical-align:top;}
+  .plan-corner{background:var(--bleu);color:#fff;text-align:center;padding:10px;width:120px;}
+  .plan-corner .wk{font-size:20px;font-weight:800;line-height:1;} .plan-corner .wl{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.85;}
+  .plan-th-tech{background:var(--gris);padding:9px 8px;text-align:center;font-size:13px;font-weight:700;}
+  .plan-day{background:var(--gris);width:120px;padding:9px;font-size:12px;}
+  .plan-day .dname{font-weight:700;text-transform:capitalize;color:var(--bleu);} .plan-day .ddate{color:var(--muted);}
+  .plan-cell{padding:4px;cursor:pointer;position:relative;height:66px;}
+  .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
+  .plan-chip{border-radius:6px;padding:3px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;line-height:1.25;overflow:hidden;}
+  .plan-chip b{display:block;font-weight:700;}
+  .plan-chip.dimmed{opacity:.7;font-style:italic;border:1px dashed #c7cdd6;} .plan-chip.dimmed b{text-decoration:line-through;}
+  .addp{position:absolute;bottom:3px;right:6px;color:var(--bord);font-size:15px;} .plan-cell:hover .addp{color:var(--bleu);}
+  tr.plan-today .plan-day{background:var(--bleu-clair);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:12px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;} .legend i{width:13px;height:13px;border-radius:3px;display:inline-block;}
+  .cfg-month-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .cfg-month-row:hover{background:var(--gris);}
+  .ast-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .ast-row:hover{background:var(--gris);}
+  @media print{ .topnav,.plan-banner,.no-print,.addp{display:none!important;} }
+</style>
+</head>
+<body>
+
+<div class="topnav" id="topnav">
+  <span class="brand">ACF <span>CHAPPERT</span> · Planning</span>
+  <button class="navlink" id="nav-dash" onclick="showView('dash')">Tableau de bord</button>
+  <button class="navlink" id="nav-planning" onclick="showView('planning')">Planning</button>
+  <button class="navlink" id="nav-chantiers" onclick="showView('chantiers')">Chantiers <span id="chantBadge" class="nav-badge"></span></button>
+  <button class="navlink" id="nav-prev" onclick="showView('prev')">Prévisionnel</button>
+  <button class="navlink" id="nav-propo" onclick="showView('propo')">Proposition</button>
+  <button class="navlink" id="nav-tech" onclick="showView('tech')">Techniciens</button>
+  <button class="navlink" id="nav-com" onclick="showView('com')">Commerciaux</button>
+  <button class="navlink" id="nav-params" onclick="showView('params')">Paramètres</button>
+  <span class="spacer"></span>
+  <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
+  <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
+</div>
+
+<!-- VUE PLANNING TECHNICIEN (plein écran, lecture seule) -->
+<div class="view" id="view-plantech">
+  <div style="position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--bord);display:flex;gap:8px;align-items:center;padding:10px 18px;flex-wrap:wrap">
+    <b style="color:var(--bleu)">ACF <span style="color:var(--rouge)">CHAPPERT</span> · Planning technicien</b>
+    <span style="flex:1"></span>
+    <button class="ghost small" onclick="weekShift(-1)">◀</button>
+    <button class="ghost small" onclick="weekToday()">Cette semaine</button>
+    <button class="ghost small" onclick="weekShift(1)">▶</button>
+    <button class="primary small" onclick="askAdminAccess()">🔒 Espace gestion</button>
+  </div>
+  <div class="wrap wrap-full"><div id="planTechWrap"></div></div>
+</div>
+
+<!-- VUE TABLEAU DE BORD -->
+<div class="view" id="view-dash">
+  <div class="wrap wrap-full">
+    <h2 class="page-h">Tableau de bord</h2>
+    <p class="sub">Vue d'ensemble des chantiers, de la charge et de la capacité montage.</p>
+    <div id="dashKpi" class="kpi-grid"></div>
+    <div class="dash-estim">
+      <h3 style="margin:0 0 4px;color:var(--bleu)">Estimation date de pose — annonce client (avant signature)</h3>
+      <p class="sub" style="margin:0 0 12px">En supposant une signature à la date indiquée, le chantier se place en fin de file (« premier signé, premier installé »), après les chantiers déjà en attente.</p>
+      <div class="estim-row">
+        <div class="mfield"><label>Heures vendues</label><input id="esH" type="number" min="1" step="0.5" value="16" oninput="runEstim()"></div>
+        <div class="mfield"><label>Nb techniciens</label><input id="esT" type="number" min="1" step="1" value="2" oninput="runEstim()"></div>
+        <div class="mfield"><label>Date de signature</label><input id="esD" type="date" onchange="runEstim()"></div>
+      </div>
+      <div id="estimOut" class="estim-out"></div>
+    </div>
+  </div>
+</div>
+
+<!-- VUE PLANNING DÉFINITIF -->
+<div class="view" id="view-planning">
+  <div class="wrap wrap-full">
+    <div class="bar" style="justify-content:space-between">
+      <h2 class="page-h" style="margin:0">Planning</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="ghost small" onclick="weekShift(-1)">◀ Semaine</button>
+        <button class="ghost small" onclick="weekToday()">Cette semaine</button>
+        <button class="ghost small" onclick="weekShift(1)">Semaine ▶</button>
+        <button class="ghost small" onclick="openAstreinteModal()">🔁 Astreintes</button>
+        <button class="ghost small" onclick="exportPlanningPage()">🌐 Page technicien</button>
+      </div>
+    </div>
+    <div id="matAlertBar"></div>
+    <div id="planLegend" class="legend"></div>
+    <div class="plan-layout">
+      <div class="plan-banner no-print">
+        <h4>Absences / interventions</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Glissez un type sur une case, puis cliquez-le pour régler la durée.</div>
+        <div id="typeBanner" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+        <h4>Chantiers à planifier</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Glissez une carte sur chaque jour / technicien voulu.</div>
+        <div id="chantierBanner"></div>
+      </div>
+      <div class="plan-grid-wrap"><div id="planGridWrap"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- VUE CHANTIERS -->
+<div class="view" id="view-chantiers">
+  <div class="wrap">
+    <h2 class="page-h">Chantiers</h2>
+    <p class="sub">Créez vos chantiers et leur planification prévisionnelle. Alerte commande matériel automatique.</p>
+    <div class="bar">
+      <div class="search"><input id="searchChantier" placeholder="Rechercher par client, réf. ou description…" oninput="renderChantiers()"></div>
+      <button class="ghost" onclick="exportData()">⤓ Sauvegarder</button>
+      <button class="ghost" onclick="document.getElementById('restoreInput').click()">⤒ Restaurer</button>
+      <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="ghost" onclick="document.getElementById('mergeInput').click()">⤭ Fusionner</button>
+      <input type="file" id="mergeInput" accept=".json" style="display:none" onchange="importMerge(event)">
+      <button class="ghost" onclick="dateChantiersByNum()">📅 Dater par n°</button>
+      <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
+    </div>
+    <div id="chantierTableWrap"></div>
+  </div>
+</div>
+
+<!-- VUE PRÉVISIONNEL -->
+<div class="view" id="view-prev">
+  <div class="wrap">
+    <h2 class="page-h">Planification prévisionnelle</h2>
+    <p class="sub">Chantiers répartis par mois de pose prévu, avec charge et capacité montage.</p>
+    <div id="prevAlertBar"></div>
+    <div id="prevWrap"></div>
+  </div>
+</div>
+
+<!-- VUE PROPOSITION -->
+<div class="view" id="view-propo">
+  <div class="wrap wrap-full">
+    <h2 class="page-h">Proposition d'optimisation du planning</h2>
+    <p class="sub">Ordre « premier signé, premier installé ». Départ de chaque chantier = date de signature + délai matériel, remplissage de la capacité montage jour par jour (congés et jours fériés déduits).</p>
+    <div class="bar">
+      <button class="primary" onclick="renderPropo()">↻ Calculer la proposition</button>
+      <button class="ghost small" onclick="exportPropoCsv()">⤓ Exporter (CSV)</button>
+    </div>
+    <div id="propoWrap"></div>
+  </div>
+</div>
+
+<!-- VUE TECHNICIENS -->
+<div class="view" id="view-tech">
+  <div class="wrap">
+    <h2 class="page-h">Techniciens</h2>
+    <p class="sub">Rôle, couleur, et participation à la boucle d'astreinte.</p>
+    <div class="bar">
+      <div class="search"><input id="searchTech" placeholder="Rechercher un technicien…" oninput="renderTech()"></div>
+      <button class="primary" onclick="openTechModal()">＋ Nouveau technicien</button>
+    </div>
+    <div id="techTableWrap"></div>
+  </div>
+</div>
+
+<!-- VUE COMMERCIAUX -->
+<div class="view" id="view-com">
+  <div class="wrap">
+    <h2 class="page-h">Commerciaux</h2>
+    <p class="sub">Chaque chantier est rattaché à un commercial ; sa couleur colore le chantier dans le planning.</p>
+    <div class="bar">
+      <div class="search"><input id="searchCom" placeholder="Rechercher un commercial…" oninput="renderCom()"></div>
+      <button class="primary" onclick="openComModal()">＋ Nouveau commercial</button>
+    </div>
+    <div id="comTableWrap"></div>
+  </div>
+</div>
+
+<!-- VUE PARAMÈTRES -->
+<div class="view" id="view-params">
+  <div class="wrap" style="max-width:640px">
+    <h2 class="page-h">Paramètres</h2>
+    <div class="modal" style="width:100%;box-shadow:none;border:1px solid var(--bord)">
+      <div class="mfield"><label>Délai d'alerte commande matériel (semaines avant la pose)</label>
+        <input id="pMatSem" type="number" min="0" step="1" onchange="saveParams()"></div>
+      <div class="mfield"><label>Heures / semaine (base capacité montage)</label>
+        <input id="pHSem" type="number" min="1" step="1" onchange="saveParams()"></div>
+      <div class="mfield"><label>Heures de pose / jour / technicien (durée des chantiers : 16 h = 1 j à 2 techniciens)</label>
+        <input id="pHJour" type="number" min="1" step="0.5" onchange="saveParams()"></div>
+      <div class="mfield"><label>Mot de passe espace gestion</label>
+        <input id="pPass" onchange="saveParams()"></div>
+      <div class="mfield"><label>Adresse du dépôt (page technicien GitHub Pages)</label>
+        <input id="pPages" onchange="saveParams()"></div>
+      <div class="mfield"><label>Logo</label>
+        <button class="ghost small" onclick="document.getElementById('logoInput').click()">Changer le logo</button>
+        <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="setLogo(event)">
+        <img id="logoPrev" style="max-height:60px;display:block;margin-top:8px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE COMMERCIAL -->
+<div class="modal-bg" id="comBg"><div class="modal">
+  <h3 id="comModalTitle">Nouveau commercial</h3>
+  <div class="mrow">
+    <div class="mfield"><label>Nom</label><input id="coNom"></div>
+    <div class="mfield" style="flex:0 0 150px"><label>Couleur</label><input id="coCouleur" type="color" value="#1b3a8c" style="height:40px;padding:2px"></div>
+  </div>
+  <div class="mrow">
+    <div class="mfield"><label>Téléphone</label><input id="coTel"></div>
+    <div class="mfield"><label>Email</label><input id="coMail"></div>
+  </div>
+  <div class="modal-actions">
+    <button class="rouge" id="coDelBtn" onclick="deleteCom()" style="margin-right:auto;display:none">Supprimer</button>
+    <button onclick="closeCom()">Annuler</button>
+    <button class="primary" onclick="saveCom()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE CHANTIER -->
+<div class="modal-bg" id="chantierBg"><div class="modal">
+  <h3 id="chModalTitle">Nouveau chantier</h3>
+  <div class="mrow">
+    <div class="mfield"><label>Client / chantier</label><input id="chClient"></div>
+    <div class="mfield" style="flex:0 0 200px"><label>Commercial (couleur)</label><select id="chCom"></select></div>
+  </div>
+  <div class="mrow">
+    <div class="mfield"><label>Date de signature (1er signé = 1er installé)</label><input type="date" id="chSign"></div>
+    <div class="mfield"><label>Adresse</label><input id="chAdresse"></div>
+  </div>
+  <div class="mfield"><label>Téléphone</label><input id="chTel"></div>
+  <div class="mfield"><label>Durée (heures) par mois de pose — cochez le(s) mois et répartissez les heures</label>
+    <div id="chMoisH" style="max-height:180px;overflow:auto;border:1px solid var(--bord);border-radius:8px;padding:6px"></div>
+    <div id="chMoisHTotal" style="text-align:right;font-weight:700;color:var(--bleu);margin-top:4px"></div>
+  </div>
+  <div class="mrow">
+    <div class="mfield" style="flex:0 0 240px"><label>Nb de techniciens sur le chantier</label>
+      <input id="chNbTech" type="number" min="1" step="1" value="1" oninput="chMoisTotal()"></div>
+    <div class="mfield"><label>Durée estimée de pose</label>
+      <div id="chDureeEst" style="padding:8px 0;font-weight:700;color:var(--bleu)">—</div></div>
+  </div>
+  <div class="mfield"><label>Technicien(s) pressenti(s)</label>
+    <div id="chTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:120px;overflow:auto"></div></div>
+  <div class="mrow">
+    <div class="mfield"><label>Matériel commandé ?</label>
+      <select id="chMat"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+    <div class="mfield"><label>Priorité</label>
+      <select id="chPrio"><option value="normale">Normale</option><option value="haute">Haute</option><option value="basse">Basse</option></select></div>
+  </div>
+  <div class="mfield"><label>Description / travaux</label><textarea id="chDesc" rows="2"></textarea></div>
+  <div class="mfield"><label>Devis joint (PDF ou image)</label>
+    <button class="ghost small" onclick="document.getElementById('chDevisInput').click()">📎 Joindre un devis</button>
+    <input type="file" id="chDevisInput" accept="application/pdf,image/*" style="display:none" onchange="attachDevis(event)">
+    <span id="chDevisInfo" style="margin-left:10px;font-size:12px"></span>
+  </div>
+  <div class="modal-actions">
+    <button class="rouge" id="chDelBtn" onclick="deleteChantier()" style="margin-right:auto;display:none">Supprimer</button>
+    <button onclick="closeChantier()">Annuler</button>
+    <button class="primary" onclick="saveChantier()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE TECHNICIEN -->
+<div class="modal-bg" id="techBg"><div class="modal">
+  <h3 id="techModalTitle">Nouveau technicien</h3>
+  <div class="mfield"><label>Nom et prénom</label><input id="tNom"></div>
+  <div class="mfield"><label>Téléphone (SMS)</label><input id="tTel"></div>
+  <div class="mrow">
+    <div class="mfield"><label>Fonction (seul Montage = capacité chantiers)</label>
+      <select id="tRole"><option value="montage">Montage</option><option value="apprenti">Apprenti</option><option value="sav">SAV</option><option value="entretien">Entretien</option><option value="bureau">Bureau</option></select></div>
+    <div class="mfield"><label>Astreinte</label>
+      <select id="tAstreinte"><option value="non">Non concerné</option><option value="oui">Dans la boucle</option></select></div>
+  </div>
+  <div class="modal-actions">
+    <button class="rouge" id="tDelBtn" onclick="deleteTech()" style="margin-right:auto;display:none">Supprimer</button>
+    <button onclick="closeTech()">Annuler</button>
+    <button class="primary" onclick="saveTech()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE ÉVÉNEMENT (absence / astreinte manuelle / autre) -->
+<div class="modal-bg" id="eventBg"><div class="modal">
+  <h3 id="evTitle">Ajouter au planning</h3>
+  <div class="mfield"><label>Type</label>
+    <select id="evType" onchange="evTypeChange()">
+      <option value="conge">Congé</option><option value="maladie">Maladie</option>
+      <option value="astreinte">Astreinte (manuelle)</option><option value="entretien">Entretien</option>
+      <option value="sav">SAV</option><option value="cours">Cours (apprenti)</option><option value="autre">Autre / note</option></select></div>
+  <div class="mrow">
+    <div class="mfield"><label id="evDateLbl">Date</label><input id="evDate" type="date"></div>
+    <div class="mfield" id="evFinRow" style="display:none"><label>Date de fin (incluse)</label><input id="evFin" type="date"></div>
+  </div>
+  <div class="mfield"><label>Technicien</label><select id="evTech"></select></div>
+  <div class="mfield"><label id="evNoteLbl">Détail / note</label><input id="evNote"></div>
+  <div class="modal-actions">
+    <button class="rouge" id="evDelBtn" onclick="deleteEvent()" style="margin-right:auto;display:none">Supprimer</button>
+    <button onclick="closeEvent()">Annuler</button>
+    <button class="primary" onclick="saveEvent()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE TÂCHE (durée en jours ouvrés) -->
+<div class="modal-bg" id="taskBg"><div class="modal">
+  <h3>Modifier la tâche</h3>
+  <div class="mfield"><label>Tâche</label><div id="taskName" style="font-weight:700"></div></div>
+  <div class="mrow">
+    <div class="mfield"><label>Date de début</label><input id="taskDate" type="date"></div>
+    <div class="mfield" style="flex:0 0 200px"><label>Durée (jours, hors week-end)</label><input id="taskDuree" type="number" min="1" step="1" value="1"></div>
+  </div>
+  <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
+  <div class="mfield"><label>Note</label><input id="taskNote"></div>
+  <div class="modal-actions">
+    <button class="rouge" onclick="deleteTask()" style="margin-right:auto">Supprimer</button>
+    <button onclick="closeTask()">Annuler</button>
+    <button class="primary" onclick="saveTask()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE ASTREINTE (gestion boucle) -->
+<div class="modal-bg" id="astreinteBg"><div class="modal">
+  <h3>Astreintes — <span id="astYear"></span></h3>
+  <p style="color:var(--muted);font-size:12px;margin:0 0 8px">Astreinte le <b>samedi 8 h – 17 h</b>, en boucle sur les techniciens cochés (ordre ci-dessous), dès le 1<sup>er</sup> janvier. Aucune astreinte les jours fériés ni lendemains de fériés.</p>
+  <div id="astList" style="max-height:260px;overflow:auto;border:1px solid var(--bord);border-radius:8px;padding:6px"></div>
+  <div class="modal-actions">
+    <button onclick="closeAstreinte()">Fermer</button>
+    <button class="primary" onclick="astGenerate()">Générer l'année</button>
+  </div>
+</div></div>
+
+<!-- MODALE PERMUTER ASTREINTE -->
+<div class="modal-bg" id="swapBg"><div class="modal">
+  <h3>Astreinte du <span id="swapDate"></span></h3>
+  <div class="mfield"><label>Technicien d'astreinte actuel</label><div id="swapTechName" style="font-weight:700"></div></div>
+  <div class="mfield"><label>Inverser avec le technicien</label><select id="swapOtherTech" onchange="swapOtherTechChange()"></select></div>
+  <div class="mfield"><label>Date d'inversion (astreinte de ce technicien)</label><select id="swapWithDate" onchange="swapInfoUpd()"></select></div>
+  <div id="swapInfo" style="font-size:12px;color:var(--muted)"></div>
+  <div class="modal-actions">
+    <button class="rouge" onclick="deleteSwap()" style="margin-right:auto">Supprimer</button>
+    <button onclick="closeSwap()">Annuler</button>
+    <button class="primary" onclick="saveSwap()">Appliquer l'inversion</button>
+  </div>
+</div></div>
+
+<script>
+/* ===== Logo ===== */
+const DEFAULT_LOGO="data:image/svg+xml;base64,"+btoa(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 210'>
+<g fill='none' stroke-width='11' stroke-linecap='round'><path d='M60 18 C15 55 15 155 60 192' stroke='#1b3a8c'/><path d='M60 18 C40 30 28 40 22 55' stroke='#e2231a'/>
+<path d='M240 18 C285 55 285 155 240 192' stroke='#1b3a8c'/><path d='M240 18 C260 30 272 40 278 55' stroke='#e2231a'/></g>
+<text x='150' y='78' text-anchor='middle' font-family='Arial' font-weight='800' font-size='40' fill='#1b3a8c'>ACF</text>
+<text x='150' y='120' text-anchor='middle' font-family='Arial' font-weight='800' font-size='40' fill='#1b3a8c'>CHAPPERT</text>
+<text x='150' y='150' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='#1b3a8c'>Froid - <tspan fill='#e2231a'>Climat</tspan>isation</text>
+<text x='150' y='172' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='#1b3a8c'>Ventilation - Chauffage</text>
+<text x='150' y='194' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='#e2231a'>Cuisines professionnelles</text></svg>`);
+
+/* ===== Base ===== */
+const DBKEY='acf_planning_chantiers_v1';
+let db=load();
+function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.chantiers){ migr(d); return d; } }catch(e){}
+  return { techniciens:[], commerciaux:[], chantiers:[], poses:[], astreinteOrder:[], seq:0,
+    params:{matSem:4, hSem:39, hJour:8, pass:'Chappert1188@&!81', pages:'https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'},
+    logo:DEFAULT_LOGO }; }
+function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
+  d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8;
+  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO; }
+function persist(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){ alert('Sauvegarde impossible (espace saturé).'); } }
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc=s=>(s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let logoData=db.logo||DEFAULT_LOGO;
+
+/* ===== Dates ===== */
+const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function mondayOf(dt){ const d=new Date(dt); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
+function isoWeek(date){ const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())); const day=(d.getUTCDay()+6)%7;
+  d.setUTCDate(d.getUTCDate()-day+3); const ft=new Date(Date.UTC(d.getUTCFullYear(),0,4)); return 1+Math.round(((d-ft)/86400000-3+((ft.getUTCDay()+6)%7))/7); }
+function easterSunday(Y){ const a=Y%19,b=Math.floor(Y/100),c=Y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1; return new Date(Y,mo-1,da); }
+function frenchHolidays(Y){ const s=new Set(); [[0,1],[4,1],[4,8],[6,14],[7,15],[10,1],[10,11],[11,25]].forEach(([m,d])=>s.add(ymd(new Date(Y,m,d))));
+  const e=easterSunday(Y); [1,39,50].forEach(o=>{ const d=new Date(e); d.setDate(d.getDate()+o); s.add(ymd(d)); }); return s; }
+function monthKey(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); }
+function monthLabel(key){ const p=(key||'').split('-'); return new Date(p[0],p[1]-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}); }
+function nextMonths(n){ const out=[]; const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); for(let i=0;i<n;i++){ out.push(monthKey(d)); d.setMonth(d.getMonth()+1); } return out; }
+function textOn(hex){ const c=(hex||'').replace('#',''); if(c.length<6) return '#fff'; const r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16); return (0.299*r+0.587*g+0.114*b)>150?'#1f2733':'#fff'; }
+
+/* ===== Statuts planning ===== */
+const POSE_STATUS={astreinte:{label:'Astreinte',color:'#7c3aed'},conge:{label:'Congé',color:'#eaff00'},maladie:{label:'Maladie',color:'#e2231a'},entretien:{label:'Entretien',color:'#f97316'},sav:{label:'SAV',color:'#1e3a8a'},cours:{label:'Cours',color:'#0891b2'},autre:{label:'Autre',color:'#64748b'}};
+
+/* ===== Navigation ===== */
+let adminUnlocked=false;
+function showView(v){
+  ['plantech','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
+  document.getElementById('topnav').style.display=(v==='plantech')?'none':'flex';
+  ['dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
+  if(v==='dash') renderDash();
+  if(v==='planning') renderPlanning();
+  if(v==='plantech') renderPlanTech();
+  if(v==='chantiers') renderChantiers();
+  if(v==='prev') renderPrev();
+  if(v==='propo') renderPropo();
+  if(v==='tech') renderTech();
+  if(v==='com') renderCom();
+  if(v==='params') renderParams();
+  updateBadges(); window.scrollTo(0,0);
+}
+function askAdminAccess(){ if(adminUnlocked){ showView('dash'); return; }
+  const pw=prompt('Espace gestion — mot de passe :'); if(pw===null) return;
+  if(pw===(db.params.pass||'')){ adminUnlocked=true; showView('dash'); } else alert('Mot de passe incorrect.'); }
+
+/* ===== Techniciens ===== */
+const ROLE_LBL={montage:'Montage',apprenti:'Apprenti',sav:'SAV',entretien:'Entretien',bureau:'Bureau'};
+function techName(id){ const t=db.techniciens.find(x=>x.id===id); return t?t.nom:''; }
+function techColor(id){ const t=db.techniciens.find(x=>x.id===id); return t&&t.couleur||'#1b3a8c'; }
+function renderTech(){
+  const q=(document.getElementById('searchTech').value||'').toLowerCase();
+  const list=db.techniciens.filter(t=>(t.nom||'').toLowerCase().includes(q));
+  const w=document.getElementById('techTableWrap');
+  if(!list.length){ w.innerHTML='<div class="empty">Aucun technicien.</div>'; return; }
+  w.innerHTML='<table class="grid"><thead><tr><th>Nom</th><th>Rôle</th><th>Astreinte</th><th>Téléphone</th><th></th></tr></thead><tbody>'+
+    list.map(t=>`<tr><td class="clic" onclick="openTechModal('${t.id}')"><b>${esc(t.nom)}</b></td>
+      <td>${ROLE_LBL[t.role||'bureau']||'—'}${(t.role||'')==='montage'?' 🔧':''}</td>
+      <td>${t.astreinte?'✅':'—'}</td><td>${esc(t.tel||'')}</td>
+      <td class="row-act"><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`).join('')+'</tbody></table>';
+}
+let editTechId=null;
+function openTechModal(id){ editTechId=id||null; const t=id?db.techniciens.find(x=>x.id===id):null;
+  document.getElementById('techModalTitle').textContent=t?'Modifier le technicien':'Nouveau technicien';
+  v('tNom',t&&t.nom||''); v('tTel',t&&t.tel||''); v('tRole',t&&t.role||'montage'); v('tAstreinte',t&&t.astreinte?'oui':'non');
+  document.getElementById('tDelBtn').style.display=t?'inline-flex':'none';
+  document.getElementById('techBg').classList.add('open'); }
+function closeTech(){ document.getElementById('techBg').classList.remove('open'); }
+function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel:val('tTel').trim(), role:val('tRole'), astreinte:val('tAstreinte')==='oui' };
+  if(!t.nom){ alert('Nom requis.'); return; }
+  if(editTechId){ const i=db.techniciens.findIndex(x=>x.id===editTechId); db.techniciens[i]=t; } else db.techniciens.push(t);
+  persist(); closeTech(); renderTech(); }
+function deleteTech(){ if(!editTechId) return; if(!confirm('Supprimer ce technicien ?')) return; db.techniciens=db.techniciens.filter(t=>t.id!==editTechId); persist(); closeTech(); renderTech(); }
+
+/* ===== Commerciaux ===== */
+function comName(id){ const c=db.commerciaux.find(x=>x.id===id); return c?c.nom:''; }
+function comColor(id){ const c=db.commerciaux.find(x=>x.id===id); return c&&c.couleur||'#1b3a8c'; }
+function renderCom(){
+  const q=(document.getElementById('searchCom').value||'').toLowerCase();
+  const list=db.commerciaux.filter(c=>(c.nom||'').toLowerCase().includes(q));
+  const w=document.getElementById('comTableWrap');
+  if(!list.length){ w.innerHTML='<div class="empty">Aucun commercial.</div>'; return; }
+  w.innerHTML='<table class="grid"><thead><tr><th>Nom</th><th>Téléphone</th><th>Email</th><th>Couleur</th><th></th></tr></thead><tbody>'+
+    list.map(c=>`<tr><td class="clic" onclick="openComModal('${c.id}')"><b>${esc(c.nom)}</b></td>
+      <td>${esc(c.tel||'')}</td><td>${esc(c.mail||'')}</td>
+      <td><span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${esc(c.couleur||'#1b3a8c')}"></span></td>
+      <td class="row-act"><button class="small" onclick="openComModal('${c.id}')">✎</button></td></tr>`).join('')+'</tbody></table>';
+}
+let editComId=null;
+function openComModal(id){ editComId=id||null; const c=id?db.commerciaux.find(x=>x.id===id):null;
+  document.getElementById('comModalTitle').textContent=c?'Modifier le commercial':'Nouveau commercial';
+  v('coNom',c&&c.nom||''); v('coCouleur',c&&c.couleur||'#1b3a8c'); v('coTel',c&&c.tel||''); v('coMail',c&&c.mail||'');
+  document.getElementById('coDelBtn').style.display=c?'inline-flex':'none';
+  document.getElementById('comBg').classList.add('open'); }
+function closeCom(){ document.getElementById('comBg').classList.remove('open'); }
+function saveCom(){ const c={ id:editComId||uid(), nom:val('coNom').trim(), couleur:val('coCouleur'), tel:val('coTel').trim(), mail:val('coMail').trim() };
+  if(!c.nom){ alert('Nom requis.'); return; }
+  if(editComId){ const i=db.commerciaux.findIndex(x=>x.id===editComId); db.commerciaux[i]=c; } else db.commerciaux.push(c);
+  persist(); closeCom(); renderCom(); }
+function deleteCom(){ if(!editComId) return; if(!confirm('Supprimer ce commercial ?')) return; db.commerciaux=db.commerciaux.filter(c=>c.id!==editComId); persist(); closeCom(); renderCom(); }
+
+/* ===== Chantiers ===== */
+function nextRef(){ const y=new Date().getFullYear(); db.seq=(db.seq||0)+1; return 'CH-'+y+'-'+String(db.seq).padStart(3,'0'); }
+function chMonths(ch){ if(ch.moisHeures) return Object.keys(ch.moisHeures).sort(); return ch.mois?[ch.mois]:[]; }
+function chHoursMonth(ch,m){ if(ch.moisHeures) return +ch.moisHeures[m]||0; if(ch.mois===m) return +ch.heures|| (ch.duree?ch.duree*7.8:0); return 0; }
+function chHoursTotal(ch){ if(ch.moisHeures) return Object.values(ch.moisHeures).reduce((s,h)=>s+(+h||0),0); return +ch.heures|| (ch.duree?ch.duree*7.8:0); }
+function configMonths(){ const out=[]; const y0=new Date().getFullYear(); for(let y=y0;y<=y0+1;y++) for(let m=1;m<=12;m++) out.push(y+'-'+String(m).padStart(2,'0')); return out; }
+function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; const p=ms[0].split('-'); const d=new Date(+p[0], +p[1]-1, 1); d.setDate(d.getDate()-(db.params.matSem||4)*7); return d; }
+function matAlertActive(ch){ if(ch.materiel==='oui'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
+function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||'#1b3a8c'; } return ch.couleur||'#1b3a8c'; }
+function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine'); }
+function renderChantiers(){
+  const q=(document.getElementById('searchChantier').value||'').toLowerCase();
+  const list=db.chantiers.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
+  const w=document.getElementById('chantierTableWrap');
+  if(!list.length){ w.innerHTML='<div class="empty">Aucun chantier. Cliquez sur « ＋ Nouveau chantier ».</div>'; return; }
+  const stL={previsionnel:'Prévisionnel',planifie:'Planifié',termine:'Terminé'};
+  w.innerHTML='<table class="grid"><thead><tr><th>Réf.</th><th>Client</th><th>Commercial</th><th>Mois prévu</th><th>Durée</th><th>Devis</th><th>Matériel</th><th>Statut</th><th></th></tr></thead><tbody>'+
+    list.map(c=>{ const alert=matAlertActive(c); const ms=chMonths(c);
+      return `<tr>
+      <td class="clic" onclick="openChantierModal('${c.id}')"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${esc(chantierColor(c))};margin-right:6px"></span>${esc(c.ref)}</td>
+      <td class="clic" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b></td>
+      <td>${esc(comName(c.commercialId)||'—')}</td>
+      <td>${ms.length?ms.map(m=>esc(monthLabel(m))).join(', '):'<span style="color:var(--rouge)">à définir</span>'}</td>
+      <td>${esc(chHoursTotal(c)+' h')}</td>
+      <td>${c.devisFile?`<a href="${c.devisFile.data}" download="${esc(c.devisFile.name)}" target="_blank" title="${esc(c.devisFile.name)}">📎 devis</a>`:'—'}</td>
+      <td>${c.materiel==='oui'?'✅ commandé':(alert?'<span class="alert-pill">⚠ à commander</span>':'—')}</td>
+      <td><span class="st ${c.statut||'previsionnel'}">${stL[c.statut||'previsionnel']}</span></td>
+      <td class="row-act"><button class="small" onclick="openChantierModal('${c.id}')">✎</button>
+        ${c.materiel!=='oui'?`<button class="small" title="Marquer matériel commandé" onclick="markMat('${c.id}')">📦 Commandé</button>`:''}
+        <button class="small rouge" onclick="delChantierRow('${c.id}')">🗑</button></td></tr>`;
+    }).join('')+'</tbody></table>';
+}
+function markMat(id){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.materiel='oui'; persist(); renderChantiers(); updateBadges(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
+function delChantierRow(id){ if(!confirm('Supprimer ce chantier ? (ses tâches planifiées seront retirées)')) return; db.chantiers=db.chantiers.filter(x=>x.id!==id); db.poses=db.poses.filter(p=>p.chantierId!==id); persist(); renderChantiers(); updateBadges(); }
+let editChId=null;
+function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(x=>x.id===id):null;
+  document.getElementById('chModalTitle').textContent=c?'Modifier le chantier':'Nouveau chantier';
+  const hpm=(c&&c.moisHeures)|| (c&&c.mois?{[c.mois]:chHoursTotal(c)}:{});
+  document.getElementById('chMoisH').innerHTML=configMonths().map(m=>{ const on=hpm[m]!=null; const hv=on?hpm[m]:'';
+    return `<label class="cfg-month-row"><input type="checkbox" class="chmk" value="${m}" ${on?'checked':''} onchange="chMoisToggle(this)"><span style="flex:1">${esc(monthLabel(m))}</span><input type="number" class="chmh" min="0" step="0.5" value="${hv}" placeholder="h" style="width:70px;text-align:right;border:1px solid var(--bord);border-radius:6px;padding:3px 6px" ${on?'':'disabled'} oninput="chMoisTotal()"><span style="color:var(--muted)">h</span></label>`; }).join('');
+  chMoisTotal();
+  const sel=new Set((c&&c.techIds)|| (c&&c.techPressenti?[c.techPressenti]:[]) || []);
+  document.getElementById('chTechs').innerHTML = db.techniciens.length ? db.techniciens.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="chtk" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${esc(t.nom)}</label>`).join('') : '<span style="color:var(--muted);font-size:12px">Aucun technicien créé.</span>';
+  document.getElementById('chCom').innerHTML='<option value="">—</option>'+db.commerciaux.map(x=>`<option value="${x.id}" ${c&&c.commercialId===x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
+  v('chClient',c&&c.client||''); v('chSign',c&&c.dateSignature||''); v('chAdresse',c&&c.adresse||''); v('chTel',c&&c.tel||''); v('chNbTech',(c&&c.nbTechs)||1);
+  v('chDuree',c&&c.duree||1); v('chMat',c&&c.materiel||'non'); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||'');
+  chDevisTmp = c&&c.devisFile || null; renderDevisInfo();
+  chMoisTotal();
+  document.getElementById('chDelBtn').style.display=c?'inline-flex':'none';
+  document.getElementById('chantierBg').classList.add('open'); }
+let chDevisTmp=null;
+function renderDevisInfo(){ const el=document.getElementById('chDevisInfo');
+  el.innerHTML = chDevisTmp ? `<a href="${chDevisTmp.data}" download="${esc(chDevisTmp.name)}" target="_blank" style="color:var(--bleu)">${esc(chDevisTmp.name)}</a> <button class="small rouge" onclick="chDevisTmp=null;renderDevisInfo()">×</button>` : '<span style="color:var(--muted)">Aucun</span>'; }
+function attachDevis(e){ const f=e.target.files[0]; if(!f) return; e.target.value='';
+  if(f.size>8*1024*1024){ if(!confirm('Ce fichier est volumineux ('+Math.round(f.size/1024/1024)+' Mo) et peut saturer le stockage. Continuer ?')) return; }
+  const r=new FileReader(); r.onload=ev=>{ chDevisTmp={name:f.name, data:ev.target.result}; renderDevisInfo(); }; r.readAsDataURL(f); }
+function closeChantier(){ document.getElementById('chantierBg').classList.remove('open'); }
+function chMoisToggle(cb){ const inp=cb.closest('.cfg-month-row').querySelector('.chmh'); inp.disabled=!cb.checked; if(cb.checked&&!inp.value) inp.focus(); chMoisTotal(); }
+function chMoisTotal(){ let t=0; document.querySelectorAll('#chMoisH .cfg-month-row').forEach(r=>{ if(r.querySelector('.chmk').checked) t+=parseFloat(r.querySelector('.chmh').value)||0; }); document.getElementById('chMoisHTotal').textContent='Total : '+t+' h';
+  const nb=Math.max(1,parseInt(val('chNbTech'))||1); const hj=perDayHours(); const jours=t>0?Math.max(1,Math.round(t/(nb*hj))):0;
+  document.getElementById('chDureeEst').textContent = t>0 ? (jours+' j ouvré(s) à '+nb+' technicien(s) · '+hj+' h/j') : '—'; }
+function saveChantier(){
+  const moisHeures={}; document.querySelectorAll('#chMoisH .cfg-month-row').forEach(r=>{ const cb=r.querySelector('.chmk'); if(cb.checked){ moisHeures[cb.value]=parseFloat(r.querySelector('.chmh').value)||0; } });
+  const c={ id:editChId||uid(), ref:'', client:val('chClient').trim(), commercialId:val('chCom'), dateSignature:val('chSign'),
+    adresse:val('chAdresse').trim(), tel:val('chTel').trim(), nbTechs:Math.max(1,parseInt(val('chNbTech'))||1), moisHeures, heures:Object.values(moisHeures).reduce((s,h)=>s+h,0),
+    techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), materiel:val('chMat'), prio:val('chPrio'), desc:val('chDesc').trim(), devisFile:chDevisTmp };
+  if(!c.client){ alert('Indiquez le client / chantier.'); return; }
+  if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
+  else { c.ref=nextRef(); c.statut='previsionnel'; db.chantiers.push(c); }
+  persist(); closeChantier(); renderChantiers(); updateBadges();
+  if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
+  if(document.getElementById('view-prev').classList.contains('active')) renderPrev();
+}
+function deleteChantier(){ if(!editChId) return; if(!confirm('Supprimer ce chantier ?')) return; db.chantiers=db.chantiers.filter(x=>x.id!==editChId); db.poses=db.poses.filter(p=>p.chantierId!==editChId); persist(); closeChantier(); renderChantiers(); updateBadges(); }
+function refNum(c){ const m=(c.ref||'').match(/(\d+)\s*$/); return m?parseInt(m[1]):0; }
+function dateChantiersByNum(){
+  if(!db.chantiers.length){ alert('Aucun chantier à dater.'); return; }
+  if(!confirm('Attribuer une date de signature à TOUS les chantiers par numéro croissant ?\n\nLe plus grand numéro = aujourd\'hui, puis un jour en moins à chaque numéro inférieur.\n\nLes dates de signature existantes seront remplacées.')) return;
+  const sorted=[...db.chantiers].sort((a,b)=> refNum(a)-refNum(b) || (a.ref<b.ref?-1:1));
+  const today=new Date(); today.setHours(0,0,0,0); const n=sorted.length;
+  sorted.forEach((c,i)=>{ const d=new Date(today); d.setDate(d.getDate()-(n-1-i)); c.dateSignature=ymd(d); });
+  persist(); renderChantiers();
+  alert(n+' chantiers datés : du '+fdate(new Date(ymd(new Date(today.getTime()-(n-1)*86400000))+'T00:00:00'))+' (n° le plus bas) au '+fdate(today)+' (n° le plus haut).');
+}
+
+/* ===== Prévisionnel (mensuel) ===== */
+function roleMonteurs(){ return db.techniciens.filter(t=>(t.role||'')==='montage'); }
+function workingDaysInMonth(y,m0){ const hol=frenchHolidays(y); let n=0; const d=new Date(y,m0,1); while(d.getMonth()===m0){ const w=d.getDay(); if(w>=1&&w<=5&&!hol.has(ymd(d))) n++; d.setDate(d.getDate()+1); } return n; }
+function absenceDaysMonth(techId,y,m0){ const hol=frenchHolidays(y); let n=0; db.poses.forEach(p=>{ if(p.techId===techId&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')&&p.date){ const dt=new Date(p.date+'T00:00:00'); if(dt.getFullYear()===y&&dt.getMonth()===m0){ const w=dt.getDay(); if(w>=1&&w<=5&&!hol.has(p.date)) n++; } } }); return n; }
+function dispoMontageHours(mk){ const p=(mk||'').split('-'); const y=+p[0],m0=+p[1]-1; if(!y||m0<0) return 0; const wd=workingDaysInMonth(y,m0); const perDay=perDayHours(); let tot=0; roleMonteurs().forEach(t=>tot+=(wd-absenceDaysMonth(t.id,y,m0))*perDay); return Math.round(tot); }
+/* heures déjà posées fermement (chantiers sur le planning) dans le mois */
+function committedMonthHours(mk){ const pp=(mk||'').split('-'); const y=+pp[0],m=+pp[1]; const ids=new Set(roleMonteurs().map(t=>t.id)); let tot=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&ids.has(p.techId)&&p.date){ const q=p.date.split('-'); if(+q[0]===y&&+q[1]===m) tot+=perDayHours(); } }); return Math.round(tot); }
+function netDispoMonth(mk){ return Math.max(0, dispoMontageHours(mk)-committedMonthHours(mk)); }
+/* séquence de mois : du 1er mois vendu jusqu'à l'horizon (pour accueillir les reports) */
+function prevMonthsSeq(){
+  const set=new Set(); db.chantiers.forEach(c=>{ if(!isPlaced(c)&&c.statut!=='termine') chMonths(c).forEach(m=>set.add(m)); });
+  if(!set.size) return [];
+  const sortedKeys=[...set].sort(); const first=sortedKeys[0], last=sortedKeys[sortedKeys.length-1];
+  const idx=k=>{ const [y,m]=k.split('-').map(Number); return y*12+(m-1); };
+  const key=i=>String(Math.floor(i/12)).padStart(4,'0')+'-'+String(i%12+1).padStart(2,'0');
+  const endIdx=Math.max(idx(last), idx(ymd(horizonEnd()).slice(0,7)));
+  const out=[]; for(let i=idx(first); i<=endIdx && out.length<72; i++) out.push(key(i)); return out;
+}
+/* lissage : report de l'excédent de charge d'un mois sur le suivant */
+function levelPrev(){
+  const seq=prevMonthsSeq(); let carry=0; const rows=[];
+  const chs=db.chantiers.filter(c=>!isPlaced(c)&&c.statut!=='termine');
+  seq.forEach(m=>{ const vendu=chs.reduce((s,c)=>s+chHoursMonth(c,m),0); const dispo=netDispoMonth(m);
+    const demande=carry+vendu; const done=Math.min(demande,dispo); const out=Math.max(0,demande-done);
+    rows.push({m,vendu:Math.round(vendu),carryIn:Math.round(carry),dispo,done:Math.round(done),carryOut:Math.round(out)}); carry=out; });
+  return {rows, finalCarry:Math.round(carry)};
+}
+
+/* ===== Moteur de proposition (1er signé = 1er installé, capacité pool heures) ===== */
+function perDayHours(){ return db.params.hJour||8; }
+function isWorkDay(d){ const w=d.getDay(); if(w<1||w>5) return false; return !frenchHolidays(d.getFullYear()).has(ymd(d)); }
+function montageAvailOnDay(dstr){ let n=0; roleMonteurs().forEach(t=>{ const off=db.poses.some(p=>p.techId===t.id&&p.date===dstr&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')); if(!off) n++; }); return n; }
+function committedChantierHoursOnDay(dstr){ const ids=new Set(roleMonteurs().map(t=>t.id)); let n=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&p.date===dstr&&ids.has(p.techId)) n++; }); return n*perDayHours(); }
+function freeCapacityOnDay(d){ if(!isWorkDay(d)) return 0; const dstr=ymd(d); return Math.max(0, montageAvailOnDay(dstr)*perDayHours() - committedChantierHoursOnDay(dstr)); }
+function isPlaced(c){ return db.poses.some(p=>p.chantierId===c.id); }
+function chSigDate(c){ if(c.dateSignature) return new Date(c.dateSignature+'T00:00:00'); const ms=chMonths(c); if(ms.length) return new Date(ms[0]+'-01T00:00:00'); return new Date(new Date().getFullYear(),0,1); }
+let lastPropo=null;
+function scheduleRemain(){
+  const list=db.chantiers.filter(c=>c.statut!=='termine' && !isPlaced(c) && chHoursTotal(c)>0);
+  list.sort((a,b)=> chSigDate(a)-chSigDate(b) || (a.ref<b.ref?-1:1));
+  const matDays=(db.params.matSem||0)*7;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const remain={};
+  function freeOn(d){ const s=ymd(d); if(remain[s]==null) remain[s]=freeCapacityOnDay(d); return remain[s]; }
+  const results=[];
+  list.forEach(c=>{
+    const sig=chSigDate(c); let start=new Date(sig); start.setDate(start.getDate()+matDays);
+    if(start<today) start=new Date(today);
+    const nbTechs=Math.max(1,c.nbTechs||1); const crewCap=nbTechs*perDayHours();
+    let d=new Date(start), hoursLeft=chHoursTotal(c), firstDay=null, lastDay=null, days=[], guard=0;
+    while(hoursLeft>0.01 && guard<5000){ guard++; const f=freeOn(d); if(f>0){ const used=Math.min(f,hoursLeft,crewCap); if(used>0.001){ remain[ymd(d)]=f-used; hoursLeft-=used; if(!firstDay) firstDay=new Date(d); lastDay=new Date(d); days.push({date:ymd(d),hours:used}); } } d.setDate(d.getDate()+1); }
+    results.push({c, sig, earliest:start, start:firstDay, end:lastDay, days, nbTechs, totalH:chHoursTotal(c), overflow:hoursLeft>0.01});
+  });
+  return {results, remain};
+}
+function buildProposal(){
+  if(!roleMonteurs().length) return {error:'Aucun technicien « Montage » défini : ajoutez-en dans Techniciens pour calculer la capacité.'};
+  const r=scheduleRemain();
+  if(!r.results.length) return {error:'Aucun chantier prévisionnel à planifier (tous placés ou terminés).'};
+  lastPropo={results:r.results, remain:r.remain, generatedAt:new Date()};
+  return lastPropo;
+}
+/* horizon = aujourd'hui -> 31 déc de l'année prochaine (fenêtre des mois configurables) */
+function horizonEnd(){ return new Date(new Date().getFullYear()+1,11,31); }
+function freeCapacityHorizon(){ let d=new Date(); d.setHours(0,0,0,0); const end=horizonEnd(); let tot=0,g=0; while(d<=end&&g<1500){ g++; tot+=freeCapacityOnDay(d); d.setDate(d.getDate()+1); } return tot; }
+function estimatePose(hours, nbTechs, sigStr){
+  const remain = scheduleRemain().remain;
+  const matDays=(db.params.matSem||0)*7;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const sig = sigStr? new Date(sigStr+'T00:00:00') : new Date(today);
+  let start=new Date(sig); start.setDate(start.getDate()+matDays); if(start<today) start=new Date(today);
+  const crewCap=Math.max(1,nbTechs)*perDayHours();
+  const local=Object.assign({},remain);
+  let d=new Date(start), hl=hours, fd=null, ld=null, nd=0, g=0;
+  while(hl>0.01 && g<5000){ g++; const s=ymd(d); let f=(local[s]!=null)?local[s]:freeCapacityOnDay(d); if(f>0){ const used=Math.min(f,hl,crewCap); if(used>0.001){ local[s]=f-used; hl-=used; if(!fd)fd=new Date(d); ld=new Date(d); nd++; } } d.setDate(d.getDate()+1); }
+  return {start:fd, end:ld, days:nd, earliest:start, ok:hl<=0.01};
+}
+function renderDash(){
+  const active=db.chantiers.filter(c=>c.statut!=='termine');
+  const placed=active.filter(isPlaced), toPlan=active.filter(c=>!isPlaced(c));
+  const hVendu=Math.round(active.reduce((s,c)=>s+chHoursTotal(c),0));
+  const hPlan=Math.round(placed.reduce((s,c)=>s+chHoursTotal(c),0));
+  const hToPlan=Math.round(toPlan.reduce((s,c)=>s+chHoursTotal(c),0));
+  const hDispo=Math.round(freeCapacityHorizon());
+  const nMont=roleMonteurs().length;
+  const over=hToPlan>hDispo;
+  const horizonLbl=capFirst(monthLabel(ymd(horizonEnd()).slice(0,7)));
+  const cards=[
+    {num:active.length, lbl:'Chantiers actifs', sub:(db.chantiers.length-active.length)+' terminé(s)'},
+    {num:placed.length, lbl:'Chantiers planifiés', sub:hPlan+' h posées'},
+    {num:toPlan.length, lbl:'Restant à planifier', sub:hToPlan+' h', cls:toPlan.length?'':'kpi-ok'},
+    {num:hVendu+' h', lbl:'Heures vendues', sub:nMont+' monteur(s)'},
+    {num:hDispo+' h', lbl:'Capacité dispo', sub:'jusqu\'à '+horizonLbl},
+    {num:(hDispo-hToPlan)+' h', lbl:'Marge capacité', sub:over?'⚠ surcharge':'capacité suffisante', cls:over?'kpi-warn':'kpi-ok'}
+  ];
+  document.getElementById('dashKpi').innerHTML=cards.map(c=>`<div class="kpi ${c.cls||''}"><div class="kpi-num">${c.num}</div><div class="kpi-lbl">${c.lbl}</div><div class="kpi-sub">${c.sub}</div></div>`).join('');
+  if(!val('esD')) v('esD', ymd(new Date()));
+  runEstim();
+}
+function runEstim(){
+  const out=document.getElementById('estimOut'); if(!out) return;
+  const h=parseFloat(val('esH'))||0, nb=Math.max(1,parseInt(val('esT'))||1), ds=val('esD');
+  if(!roleMonteurs().length){ out.innerHTML='<span style="color:var(--rouge)">Aucun technicien « Montage » : impossible d\'estimer.</span>'; return; }
+  if(h<=0){ out.innerHTML='<span style="color:var(--muted)">Indiquez un nombre d\'heures.</span>'; return; }
+  const e=estimatePose(h, nb, ds);
+  const jours=Math.max(1,Math.round(h/(nb*perDayHours())));
+  if(!e.start){ out.innerHTML='<span style="color:var(--rouge)">Capacité insuffisante sur l\'horizon pour estimer la pose.</span>'; return; }
+  const today=new Date(); today.setHours(0,0,0,0);
+  const deltaDays=Math.max(0,Math.round((e.start-today)/86400000));
+  const semaines=Math.max(0,Math.round(deltaDays/7));
+  const sem2=Math.max(2,Math.round(semaines/2)*2); // arrondi à 2 semaines près
+  const winFin=new Date(e.start); winFin.setDate(winFin.getDate()+14);
+  out.innerHTML='Délai à annoncer au client : <span class="big">~'+sem2+' semaines</span> <span class="kpi-sub">(± 2 sem.)</span><br>'+
+    'Pose estimée entre le <b>'+fdate(e.start)+'</b> et le <b>'+fdate(winFin)+'</b>.<br>'+
+    '<span class="kpi-sub">Matériel disponible le '+fdate(e.earliest)+' · '+jours+' jour(s) de pose à '+nb+' technicien(s) · '+h+' h · placé en fin de file actuelle</span>';
+}
+function fdate(d){ return d? d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—'; }
+function fdateShort(d){ return d? d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}) : '—'; }
+function renderPropo(){
+  const box=document.getElementById('propoWrap'); const r=buildProposal();
+  if(r.error){ box.innerHTML='<div class="empty">'+esc(r.error)+'</div>'; return; }
+  const perDay=perDayHours(); const nMont=roleMonteurs().length;
+  // regroupement par mois de DÉBUT estimé
+  const byMonth={};
+  r.results.forEach(x=>{ const mk=x.start?ymd(x.start).slice(0,7):'—'; (byMonth[mk]=byMonth[mk]||[]).push(x); });
+  const months=Object.keys(byMonth).filter(m=>m!=='—').sort(); if(byMonth['—']) months.push('—');
+  let html='<div class="propo-head">Base : '+nMont+' monteur(s) × '+perDay.toFixed(1)+' h/j · délai matériel '+(db.params.matSem||0)+' sem. · '+r.results.length+' chantier(s) à planifier</div>';
+  months.forEach(m=>{
+    const items=byMonth[m].sort((a,b)=> (a.start?a.start-b.start:1));
+    const totH=items.reduce((s,x)=>s+x.totalH,0);
+    const dispo=m==='—'?0:dispoMontageHours(m);
+    html+='<div class="propo-month"><div class="propo-month-h">'+(m==='—'?'Hors capacité / non datable':capFirst(monthLabel(m)))+' <span class="propo-cap">'+Math.round(totH)+' h planifiées'+(dispo?(' / '+dispo+' h dispo'):'')+'</span></div>';
+    html+='<table class="grid propo-tbl"><thead><tr><th>Réf</th><th>Chantier</th><th>Signé</th><th>Dispo mat.</th><th>Montage estimé</th><th>Tech.</th><th>Jours</th><th>Heures</th></tr></thead><tbody>';
+    items.forEach(x=>{
+      const col=chantierColor(x.c);
+      const period = x.start? (fdateShort(x.start)+(x.end&&ymd(x.end)!==ymd(x.start)?' → '+fdateShort(x.end):'')) : '—';
+      html+='<tr'+(x.overflow?' style="background:#fdecec"':'')+'>'+
+        '<td class="clic" onclick="openChantierModal(\''+x.c.id+'\')"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+esc(col)+';margin-right:5px"></span>'+esc(x.c.ref)+'</td>'+
+        '<td><b>'+esc(x.c.client)+'</b></td>'+
+        '<td>'+fdate(x.sig)+'</td>'+
+        '<td>'+fdate(x.earliest)+'</td>'+
+        '<td><b>'+period+'</b></td>'+
+        '<td>'+x.nbTechs+'</td>'+
+        '<td>'+x.days.length+' j</td>'+
+        '<td>'+Math.round(x.totalH)+' h'+(x.overflow?' ⚠':'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  });
+  box.innerHTML=html;
+}
+function capFirst(s){ return s? s.charAt(0).toUpperCase()+s.slice(1):s; }
+function exportPropoCsv(){
+  const r=lastPropo||buildProposal(); if(r.error){ alert(r.error); return; }
+  const rows=[['Réf','Chantier','Commercial','Date signature','Dispo matériel','Début montage','Fin montage','Nb techniciens','Jours','Heures','Détail jour par jour']];
+  r.results.forEach(x=>{ const com=db.commerciaux.find(c=>c.id===x.c.commercialId); rows.push([x.c.ref,x.c.client,com?com.nom:'',x.c.dateSignature||'',ymd(x.earliest),x.start?ymd(x.start):'',x.end?ymd(x.end):'',x.nbTechs,x.days.length,Math.round(x.totalH),x.days.map(d=>d.date+':'+Math.round(d.hours)+'h').join(' | ')]); });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='proposition-planning-acf.csv'; a.click();
+}
+function renderPrev(){
+  const alerts=db.chantiers.filter(matAlertActive);
+  document.getElementById('prevAlertBar').innerHTML = alerts.length?
+    '<div style="background:#fff7e8;border:1px solid var(--orange);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px"><b style="color:#8a5a00">⚠ Matériel à commander ('+alerts.length+') :</b> '+
+    alerts.map(c=>esc(c.client)+' ('+(c.mois?monthLabel(c.mois):'?')+')').join(' · ')+'</div>':'';
+  const wrap=document.getElementById('prevWrap'); const all=chantiersToPlan();
+  const byMonth={}; const noMonth=[];
+  all.forEach(c=>{ const ms=chMonths(c); if(!ms.length){ noMonth.push(c); } else ms.forEach(m=>{ (byMonth[m]=byMonth[m]||[]).push(c); }); });
+  const months=Object.keys(byMonth).sort();
+  if(!months.length && !noMonth.length){ wrap.innerHTML='<div class="empty">Aucun chantier prévisionnel.</div>'; return; }
+  // --- Bandeau lissage capacité (respect heures vendues / disponibles) ---
+  const lv=levelPrev(); const lvMap={}; lv.rows.forEach(r=>lvMap[r.m]=r);
+  const shown=lv.rows.filter(r=>r.vendu>0||r.carryIn>0||r.carryOut>0);
+  let html='';
+  if(shown.length){
+    html+='<div class="level-wrap"><div class="level-h">Lissage capacité — l\'excédent d\'un mois est reporté au mois suivant (heures vendues ≤ heures disponibles)</div>';
+    html+='<table class="grid level-tbl"><thead><tr><th>Mois</th><th>Vendu</th><th>Report entrant</th><th>Dispo net</th><th>Posable</th><th>Report sortant</th></tr></thead><tbody>';
+    shown.forEach(r=>{ const warn=r.carryOut>0; html+='<tr'+(warn?' style="background:#fdecec"':'')+'><td><b>'+capFirst(monthLabel(r.m))+'</b></td><td>'+r.vendu+' h</td><td>'+(r.carryIn?('+'+r.carryIn+' h'):'—')+'</td><td>'+r.dispo+' h</td><td>'+r.done+' h</td><td>'+(r.carryOut?('<b style="color:var(--rouge)">'+r.carryOut+' h →</b>'):'<span style="color:#1a7f3c">0</span>')+'</td></tr>'; });
+    html+='</tbody></table>';
+    if(lv.finalCarry>0) html+='<div class="level-foot" style="color:var(--rouge)">⚠ '+lv.finalCarry+' h ne tiennent pas dans l\'horizon : il faut décaler, ajouter de la capacité, ou étaler ces chantiers.</div>';
+    else html+='<div class="level-foot" style="color:#1a7f3c">✔ Toutes les heures vendues tiennent dans la capacité disponible.</div>';
+    html+='</div>';
+  }
+  html+='<div class="month-board">';
+  months.forEach(m=>{ const items=byMonth[m]; const totH=items.reduce((s,c)=>s+chHoursMonth(c,m),0); const dispo=netDispoMonth(m); const over=totH>dispo;
+    html+=`<div class="month-col"><div class="month-head">${esc(monthLabel(m))}</div>`+
+      items.map(c=>{ const hm=chHoursMonth(c,m); const multi=chMonths(c).length>1;
+        return `<div class="month-item" style="background:${esc(chantierColor(c))};color:${textOn(chantierColor(c))}" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b><span>${esc(c.ref)} · ${hm} h${multi?' (réparti)':''}${matAlertActive(c)?' · ⚠ matériel':''}</span></div>`; }).join('')+
+      `<div class="month-foot" ${over?'style="background:#fdecec;color:var(--rouge)"':''}>${Math.round(totH)} h / ${dispo} h dispo</div></div>`;
+  });
+  if(noMonth.length){ html+=`<div class="month-col"><div class="month-head" style="background:var(--muted)">Sans mois</div>`+
+    noMonth.map(c=>`<div class="month-item" style="background:${esc(chantierColor(c))};color:${textOn(chantierColor(c))}" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b><span>${esc(c.ref)} · ${chHoursTotal(c)} h</span></div>`).join('')+
+    `<div class="month-foot">à définir</div></div>`; }
+  html+='</div>'; wrap.innerHTML=html;
+}
+
+/* ===== Planning hebdo ===== */
+let weekStart=mondayOf(new Date());
+function weekShift(n){ weekStart.setDate(weekStart.getDate()+n*7); refreshPlanning(); }
+function weekToday(){ weekStart=mondayOf(new Date()); refreshPlanning(); }
+function refreshPlanning(){ if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); else renderPlanning(); }
+function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
+function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
+  db.commerciaux.forEach(c=>h+=`<span><i style="background:${esc(c.couleur||'#1b3a8c')}"></i>${esc(c.nom)}</span>`);
+  Object.values(POSE_STATUS).forEach(s=>h+=`<span><i style="background:${s.color}"></i>${s.label}</span>`); return h; }
+function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return '#1b3a8c'; } return (POSE_STATUS[p.type]||{}).color||'#64748b'; }
+function poseLabel(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return ch.client; } return p.label||'Chantier'; }
+  if(p.type==='astreinte') return p.note?p.note:'Astreinte'; return (POSE_STATUS[p.type]||{}).label||p.type; }
+function buildGrid(ro){
+  if(!db.techniciens.length) return '<div class="empty">Ajoutez des techniciens pour construire le planning.</div>';
+  const wk=isoWeek(weekStart); const todayStr=ymd(new Date()); const end=new Date(weekStart); end.setDate(end.getDate()+5);
+  let html='<div style="margin-bottom:8px;color:var(--muted)">Semaine '+wk+' — du '+weekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</div>';
+  const minW=120+db.techniciens.length*92;
+  html+='<table class="plan-table" style="min-width:'+minW+'px"><thead><tr><th class="plan-corner"><div class="wl">Sem.</div><div class="wk">'+wk+'</div></th>'+
+    db.techniciens.map(t=>`<th class="plan-th-tech">${esc(t.nom)}</th>`).join('')+'</tr></thead><tbody>';
+  const weekHasManualAst=db.poses.some(p=>p.type==='astreinte'&&!p.astreinteAuto&&p.date>=ymd(weekStart)&&p.date<=ymd(new Date(weekStart.getTime()+6*864e5)));
+  for(let i=0;i<6;i++){ const d=new Date(weekStart); d.setDate(d.getDate()+i); const ds=ymd(d);
+    html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+'</div></td>';
+    html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
+      const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
+      return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':textOn(col);
+        const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
+        const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
+        return `<div class="plan-chip${dim?' dimmed':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}</div>`;
+      }).join('')+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
+    html+='</tr>'; }
+  html+='</tbody></table>'; return html;
+}
+function renderPlanning(){
+  document.getElementById('planLegend').innerHTML=legendHtml();
+  const alerts=db.chantiers.filter(matAlertActive);
+  document.getElementById('matAlertBar').innerHTML=alerts.length?
+    '<div style="background:#fff7e8;border:1px solid var(--orange);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:13px"><b style="color:#8a5a00">⚠ Matériel à commander :</b> '+alerts.map(c=>esc(c.client)).join(' · ')+'</div>':'';
+  renderTypeBanner(); renderBanner();
+  document.getElementById('planGridWrap').innerHTML=buildGrid(false);
+}
+function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML='<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
+function renderBanner(){
+  const box=document.getElementById('chantierBanner'); const list=chantiersToPlan().sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
+  if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">Aucun chantier à planifier.</div>'; return; }
+  box.innerHTML=list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id);
+    return `<div class="ch-card" draggable="true" style="border-left-color:${esc(chantierColor(c))}" ondragstart="chDragStart(event,'${c.id}')" ondragend="chDragEnd(event)">
+      <div class="cc-nom">${esc(c.client)} ${placed?'<span style="color:var(--vert)">✓</span>':''}</div>
+      <div class="cc-meta">${esc(c.ref)} · ${chHoursTotal(c)} h · ${chMonths(c).length?chMonths(c).map(m=>esc(monthLabel(m))).join(', '):'mois ?'}${matAlertActive(c)?' · ⚠ matériel':''}</div>
+      ${(c.techIds&&c.techIds.length)?`<div class="cc-meta" style="color:var(--bleu)">👷 ${c.techIds.map(id=>esc(techName(id))).filter(Boolean).join(', ')}</div>`:''}
+      <div class="cc-act">${placed?`<button class="small" onclick="finishChantier('${c.id}')">✓ Terminé</button><button class="small" onclick="unplaceChantier('${c.id}')">Retirer du planning</button>`:`<button class="small" onclick="openChantierModal('${c.id}')">✎</button>`}</div>
+    </div>`; }).join('');
+}
+/* Types à glisser (absences / interventions) */
+const DRAG_TYPES=[['conge','Congé'],['maladie','Maladie'],['entretien','Entretien'],['sav','SAV'],['cours','Cours'],['autre','Autre']];
+function renderTypeBanner(){ const box=document.getElementById('typeBanner'); if(!box) return;
+  box.innerHTML=DRAG_TYPES.map(([t,lbl])=>{ const col=(POSE_STATUS[t]||{}).color||'#64748b';
+    return `<div class="ch-card" draggable="true" style="border-left-color:${col};padding:5px 9px;margin:0;font-size:12px;font-weight:600" ondragstart="typeDragStart(event,'${t}')" ondragend="chDragEnd(event)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:5px"></span>${lbl}</div>`; }).join(''); }
+/* Drag & drop */
+let dragChId=null, dragType=null;
+function chDragStart(e,id){ dragChId=id; dragType=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','CH:'+id);}catch(_){}
+  e.currentTarget.classList.add('dragging'); }
+function typeDragStart(e,t){ dragType=t; dragChId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','TYPE:'+t);}catch(_){}
+  e.currentTarget.classList.add('dragging'); }
+function chDragEnd(e){ e.currentTarget.classList.remove('dragging'); dragChId=null; dragType=null; }
+function cellOver(e){ if(!dragChId&&!dragType) return; e.preventDefault(); e.currentTarget.classList.add('drop-hover'); }
+function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
+function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover');
+  if(dragChId){ placeChantier(dragChId,ds,techId); return; }
+  if(dragType){ placeType(dragType,ds,techId); return; }
+  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('CH:')) placeChantier(data.slice(3),ds,techId); else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+function placeType(type,ds,techId){ if(!db.poses.some(p=>p.type===type&&p.techId===techId&&p.date===ds)){ db.poses.push({id:uid(),type,techId,date:ds,note:'',groupId:uid()}); } persist(); renderPlanning(); }
+function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch) return;
+  // Un seul jour par dépôt : glissez le chantier autant de fois que nécessaire (jours / techniciens)
+  if(!db.poses.some(p=>p.chantierId===chId&&p.techId===techId&&p.date===ds)){
+    db.poses.push({id:uid(),type:'chantier',chantierId:chId,techId,date:ds,note:''}); }
+  ch.statut='planifie'; persist(); renderPlanning();
+}
+function unplaceChantier(id){ if(!confirm('Retirer ce chantier du planning (toutes ses tâches) ?')) return; db.poses=db.poses.filter(p=>p.chantierId!==id); const ch=db.chantiers.find(c=>c.id===id); if(ch&&ch.statut==='planifie') ch.statut='previsionnel'; persist(); renderPlanning(); }
+function finishChantier(id){ const ch=db.chantiers.find(c=>c.id===id); if(ch) ch.statut='termine'; persist(); renderPlanning(); updateBadges(); }
+
+/* Clic sur une tâche : édition durée (jours hors week-end) */
+function poseClick(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
+  if(p.type==='astreinte'){ openSwap(p); return; }
+  openTask(p);
+}
+function blockFilter(ctx){ if(ctx.chantierId) return p=>p.type==='chantier'&&p.chantierId===ctx.chantierId&&p.techId===ctx.techId;
+  if(ctx.groupId) return p=>p.groupId===ctx.groupId; return p=>p.id===ctx.id; }
+let taskCtx=null;
+function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||''};
+  const fwd=db.poses.filter(blockFilter(taskCtx)).filter(x=>x.date>=p.date).length;
+  document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
+  v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
+  document.getElementById('taskTech').innerHTML=db.techniciens.map(t=>`<option value="${t.id}" ${t.id===p.techId?'selected':''}>${esc(t.nom)}</option>`).join('');
+  document.getElementById('taskBg').classList.add('open'); }
+function closeTask(){ document.getElementById('taskBg').classList.remove('open'); }
+function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
+  if(!start||!techId){ alert('Date et technicien requis.'); return; }
+  // retire la partie du bloc à partir de la date cliquée
+  db.poses=db.poses.filter(p=>!(blockFilter(ctx)(p)&&p.date>=ctx.date));
+  const gid=ctx.chantierId? null : (ctx.groupId||uid());
+  let cur=new Date(start+'T00:00:00'), placed=0;
+  while(placed<N){ const w=cur.getDay(); if(w>=1&&w<=5){ const d2=ymd(cur); // jours ouvrés : lundi→vendredi (hors week-end)
+      const dup=db.poses.some(p=>p.type===ctx.type&&p.date===d2&&p.techId===techId&&(ctx.chantierId?p.chantierId===ctx.chantierId:p.groupId===gid));
+      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } db.poses.push(np); }
+      placed++; }
+    cur.setDate(cur.getDate()+1); }
+  if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); if(ch) ch.statut='planifie'; }
+  persist(); closeTask(); renderPlanning(); }
+function deleteTask(){ const ctx=taskCtx; if(!ctx) return; if(!confirm('Supprimer cette tâche ?')) return;
+  db.poses=db.poses.filter(p=>!blockFilter(ctx)(p));
+  if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); const others=db.poses.some(p=>p.chantierId===ctx.chantierId); if(ch&&!others&&ch.statut==='planifie') ch.statut='previsionnel'; }
+  persist(); closeTask(); renderPlanning(); }
+function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return; if(p.type==='chantier'){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) alert('Chantier : '+ch.client+'\n'+(ch.adresse||'')+'\n'+(ch.tel?'Tél : '+ch.tel:'')); } }
+
+/* ===== Événement (absence / astreinte manuelle) ===== */
+let editEvId=null;
+function cellClick(ds,techId){ openEvent(null,ds,techId); }
+function openEvent(p,ds,techId){ editEvId=p?p.id:null;
+  document.getElementById('evTitle').textContent=p?'Modifier':'Ajouter au planning';
+  v('evType',p&&p.type||'conge'); v('evDate',p?p.date:(ds||ymd(new Date()))); v('evFin','');
+  document.getElementById('evTech').innerHTML=db.techniciens.map(t=>`<option value="${t.id}" ${t.id===(p?p.techId:techId)?'selected':''}>${esc(t.nom)}</option>`).join('');
+  v('evNote',p&&p.note||''); document.getElementById('evDelBtn').style.display=p?'inline-flex':'none';
+  evTypeChange(); document.getElementById('eventBg').classList.add('open'); }
+function closeEvent(){ document.getElementById('eventBg').classList.remove('open'); }
+function evTypeChange(){ const t=val('evType'); const range=(t==='conge'||t==='maladie'||t==='cours');
+  document.getElementById('evFinRow').style.display=range?'block':'none';
+  document.getElementById('evDateLbl').textContent=range?'Date de début':'Date';
+  document.getElementById('evNoteLbl').textContent=t==='astreinte'?'Texte affiché (remplace « Astreinte »)':'Détail / note'; }
+function saveEvent(){ const type=val('evType'); const date=val('evDate'); const techId=val('evTech'); const note=val('evNote').trim();
+  if(!date||!techId){ alert('Date et technicien requis.'); return; }
+  const range=(type==='conge'||type==='maladie'||type==='cours'); const fin=range?val('evFin'):'';
+  if(range&&fin){ if(fin<date){ alert('Date de fin ≥ date de début.'); return; }
+    if(editEvId) db.poses=db.poses.filter(x=>x.id!==editEvId); const gid=uid(); let cur=new Date(date+'T00:00:00'); const endD=new Date(fin+'T00:00:00'); let n=0;
+    while(cur<=endD){ if(cur.getDay()!==0){ db.poses.push({id:uid(),groupId:gid,type,date:ymd(cur),techId,note}); n++; } cur.setDate(cur.getDate()+1); }
+    persist(); closeEvent(); refreshPlanning(); alert(n+' jour(s) ajouté(s).'); return; }
+  const p={ id:editEvId||uid(), type, date, techId, note };
+  if(editEvId){ const i=db.poses.findIndex(x=>x.id===editEvId); db.poses[i]=p; } else db.poses.push(p);
+  persist(); closeEvent(); refreshPlanning(); }
+function deleteEvent(){ if(!editEvId) return; const p=db.poses.find(x=>x.id===editEvId);
+  if(p&&p.groupId){ if(confirm('Supprimer TOUTE la période ? (Annuler = ce seul jour)')) db.poses=db.poses.filter(x=>x.groupId!==p.groupId); else db.poses=db.poses.filter(x=>x.id!==editEvId); }
+  else { if(!confirm('Supprimer ?')) return; db.poses=db.poses.filter(x=>x.id!==editEvId); }
+  persist(); closeEvent(); refreshPlanning(); }
+
+/* ===== Astreintes ===== */
+function openAstreinteModal(){ if(!Array.isArray(db.astreinteOrder)) db.astreinteOrder=[];
+  const have=new Set(db.astreinteOrder.map(x=>x.techId));
+  db.techniciens.forEach(t=>{ if(!have.has(t.id)) db.astreinteOrder.push({techId:t.id,on:!!t.astreinte}); });
+  db.astreinteOrder=db.astreinteOrder.filter(x=>db.techniciens.find(t=>t.id===x.techId));
+  document.getElementById('astYear').textContent=weekStart.getFullYear(); renderAstreinteList();
+  document.getElementById('astreinteBg').classList.add('open'); }
+function renderAstreinteList(){ document.getElementById('astList').innerHTML=db.astreinteOrder.map((x,i)=>{ const t=db.techniciens.find(tt=>tt.id===x.techId); if(!t) return '';
+  return `<div class="ast-row"><input type="checkbox" ${x.on?'checked':''} onchange="astToggle(${i},this.checked)"><span style="flex:1">${esc(t.nom)}</span>
+    <button class="small" onclick="astMove(${i},-1)">▲</button><button class="small" onclick="astMove(${i},1)">▼</button></div>`; }).join(''); }
+function astToggle(i,on){ db.astreinteOrder[i].on=on; renderAstreinteList(); }
+function astMove(i,dir){ const j=i+dir; if(j<0||j>=db.astreinteOrder.length) return; const a=db.astreinteOrder; const t=a[i]; a[i]=a[j]; a[j]=t; renderAstreinteList(); }
+function closeAstreinte(){ persist(); document.getElementById('astreinteBg').classList.remove('open'); }
+function astGenerate(){ const order=db.astreinteOrder.filter(x=>x.on).map(x=>x.techId); if(!order.length){ alert('Cochez au moins un technicien.'); return; }
+  const year=weekStart.getFullYear(); const hol=frenchHolidays(year);
+  db.poses=db.poses.filter(p=>!(p.astreinteAuto && (p.date||'').slice(0,4)===String(year)));
+  let dt=new Date(year,0,1); while(dt.getDay()!==6) dt.setDate(dt.getDate()+1); let idx=0,count=0,skip=0;
+  while(dt.getFullYear()===year){ const sat=ymd(dt); const fri=ymd(new Date(dt.getTime()-864e5));
+    if(hol.has(sat)||hol.has(fri)){ skip++; } else { db.poses.push({id:uid(),type:'astreinte',astreinteAuto:true,date:sat,techId:order[idx%order.length],note:''}); idx++; count++; }
+    dt.setDate(dt.getDate()+7); }
+  persist(); document.getElementById('astreinteBg').classList.remove('open'); refreshPlanning();
+  alert(count+' astreintes générées pour '+year+' ('+skip+' samedi(s) sautés : fériés/lendemains).'); }
+/* Permuter / réassigner astreinte */
+let swapId=null;
+function astreinteTechSet(){ const on=db.astreinteOrder.filter(x=>x.on).map(x=>x.techId);
+  if(on.length) return new Set(on); return new Set(db.techniciens.filter(t=>t.astreinte).map(t=>t.id)); }
+function openSwap(p){ swapId=p.id; document.getElementById('swapDate').textContent=new Date(p.date).toLocaleDateString('fr-FR');
+  document.getElementById('swapTechName').textContent=techName(p.techId);
+  const set=astreinteTechSet();
+  const opts=db.techniciens.filter(t=>t.id!==p.techId&&set.has(t.id));
+  document.getElementById('swapOtherTech').innerHTML='<option value="">— choisir un technicien —</option>'+opts.map(t=>`<option value="${t.id}">${esc(t.nom)}</option>`).join('');
+  document.getElementById('swapWithDate').innerHTML='';
+  document.getElementById('swapInfo').textContent = opts.length?'' : 'Aucun autre technicien dans la boucle d\'astreinte. Cochez-les via « 🔁 Astreintes ».';
+  document.getElementById('swapBg').classList.add('open'); }
+function closeSwap(){ document.getElementById('swapBg').classList.remove('open'); }
+function swapOtherTechChange(){ const p=db.poses.find(x=>x.id===swapId); const B=val('swapOtherTech'); const sel=document.getElementById('swapWithDate');
+  if(!p||!B){ sel.innerHTML=''; swapInfoUpd(); return; }
+  const dates=db.poses.filter(x=>x.type==='astreinte'&&x.techId===B&&x.id!==p.id).sort((a,b)=>a.date.localeCompare(b.date));
+  // proposer la date la plus proche >= date courante, sinon la plus proche avant
+  let def=dates.find(d=>d.date>=p.date); if(!def) def=dates[dates.length-1];
+  sel.innerHTML='<option value="">— réassigner cette date (pas d\'échange) —</option>'+dates.map(o=>`<option value="${o.id}" ${def&&o.id===def.id?'selected':''}>${new Date(o.date).toLocaleDateString('fr-FR')}</option>`).join('');
+  swapInfoUpd(); }
+function swapInfoUpd(){ const p=db.poses.find(x=>x.id===swapId); const B=val('swapOtherTech'); const d2id=val('swapWithDate'); const info=document.getElementById('swapInfo');
+  if(!p||!B){ info.textContent=''; return; }
+  if(d2id){ const o=db.poses.find(x=>x.id===d2id); info.innerHTML='Échange : <b>'+esc(techName(p.techId))+'</b> prendra le '+new Date(o.date).toLocaleDateString('fr-FR')+', <b>'+esc(techName(B))+'</b> prendra le '+new Date(p.date).toLocaleDateString('fr-FR')+'.'; }
+  else info.innerHTML='<b>'+esc(techName(B))+'</b> prendra l\'astreinte du '+new Date(p.date).toLocaleDateString('fr-FR')+' (pas d\'échange de date).'; }
+function saveSwap(){ const p=db.poses.find(x=>x.id===swapId); if(!p) return; const B=val('swapOtherTech');
+  if(!B){ alert('Choisissez un technicien.'); return; }
+  const d2id=val('swapWithDate');
+  if(d2id){ const o=db.poses.find(x=>x.id===d2id); if(o){ const tmp=p.techId; p.techId=o.techId; o.techId=tmp; o.astreinteAuto=false; } }
+  else { p.techId=B; }
+  p.astreinteAuto=false; // inversion conservée lors d'une régénération
+  persist(); closeSwap(); refreshPlanning(); }
+function deleteSwap(){ const p=db.poses.find(x=>x.id===swapId); if(!p) return; if(!confirm('Supprimer cette astreinte ?')) return; db.poses=db.poses.filter(x=>x.id!==swapId); persist(); closeSwap(); refreshPlanning(); }
+
+/* ===== Page technicien (export HTML) ===== */
+function exportPlanningPage(){ const wk=isoWeek(weekStart); const html=buildStandalone();
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='planning-semaine-'+wk+'.html'; a.click(); }
+function buildStandalone(){ const wk=isoWeek(weekStart); const end=new Date(weekStart); end.setDate(end.getDate()+5); const techs=db.techniciens; const todayStr=ymd(new Date());
+  let rows='';
+  for(let i=0;i<6;i++){ const d=new Date(weekStart); d.setDate(d.getDate()+i); const ds=ymd(d);
+    rows+=`<tr class="${ds===todayStr?'today':''}"><td class="day"><b>${JOURS[i]}</b><br><small>${d.toLocaleDateString('fr-FR')}</small></td>`;
+    rows+=techs.map(t=>{ const ps=posesAt(ds,t.id); return '<td>'+ps.map(p=>{ const col=poseColor(p); return `<div class="chip" style="background:${col};color:${textOn(col)}"><b>${esc(poseLabel(p))}</b>${p.note&&p.type!=='astreinte'?'<br><small>'+esc(p.note)+'</small>':''}</div>`; }).join('')+'</td>'; }).join('');
+    rows+='</tr>'; }
+  let leg='<span><i style="background:#1b3a8c"></i>Chantier</span>'+Object.values(POSE_STATUS).map(s=>`<span><i style="background:${s.color}"></i>${s.label}</span>`).join('');
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning semaine ${wk}</title>
+<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f4f5f7;color:#1f2733}.wrap{max-width:1100px;margin:0 auto;padding:14px}h1{color:#1b3a8c;font-size:19px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin:8px 0}.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dce4;border-radius:12px;overflow:hidden;table-layout:fixed}th,td{border:1px solid #d8dce4;vertical-align:top;padding:5px;font-size:13px}th{background:#f4f5f7}.day{width:110px;background:#f4f5f7}tr.today .day{background:#e8eefb}
+.chip{border-radius:6px;padding:4px 7px;margin-bottom:4px;font-size:12px;line-height:1.3}small{opacity:.85}</style></head><body><div class="wrap">
+<h1>Planning de pose — Semaine ${wk}</h1><div style="color:#66707e">Du ${weekStart.toLocaleDateString('fr-FR')} au ${end.toLocaleDateString('fr-FR')} · lecture seule</div>
+<div class="legend">${leg}</div><table><thead><tr><th class="day">Sem. ${wk}</th>${techs.map(t=>`<th>${esc(t.nom)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+<div style="text-align:center;color:#66707e;font-size:11px;margin-top:12px">SAS ACF CHAPPERT</div></div></body></html>`; }
+
+/* ===== Paramètres / sauvegarde ===== */
+function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; }
+function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); }
+function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
+function exportData(){ const blob=new Blob([JSON.stringify(db)],{type:'application/json;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acf-planning-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
+function importData(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ e.target.value=''; let o; try{o=JSON.parse(ev.target.result);}catch(err){ alert('JSON illisible.'); return; }
+  if(!o||!o.chantiers){ alert('Sauvegarde invalide.'); return; } if(!confirm('Restaurer et REMPLACER les données actuelles ?')) return; migr(o); db=o; logoData=db.logo||DEFAULT_LOGO; persist(); showView('chantiers'); alert('Restauration terminée.'); };
+  r.readAsText(f,'UTF-8'); }
+
+/* ===== Fusion (merge) d'un fichier ===== */
+function importMerge(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+  r.onload=ev=>{ e.target.value=''; let o; try{o=JSON.parse(ev.target.result);}catch(err){ alert('JSON illisible.'); return; }
+    if(!o||(!o.chantiers&&!o.poses)){ alert('Fichier invalide.'); return; }
+    if(!confirm('Fusionner ce fichier avec vos données actuelles ? (Rien n\'est supprimé ; les techniciens existants sont conservés.)')) return;
+    const norm=s=>(s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+    // techniciens : map par nom, ajoute les manquants
+    const techMap={}; (o.techniciens||[]).forEach(it=>{ const ex=db.techniciens.find(t=>norm(t.nom)===norm(it.nom));
+      if(ex) techMap[it.id]=ex.id; else { const nt={id:it.id||uid(),nom:it.nom,tel:it.tel||'',role:it.role||'montage',astreinte:!!it.astreinte}; db.techniciens.push(nt); techMap[it.id]=nt.id; } });
+    // commerciaux : map par nom, ajoute les manquants
+    const comMap={}; (o.commerciaux||[]).forEach(it=>{ const ex=db.commerciaux.find(c=>norm(c.nom)===norm(it.nom));
+      if(ex) comMap[it.id]=ex.id; else { const nc={id:it.id||uid(),nom:it.nom,couleur:it.couleur||'#1b3a8c',tel:it.tel||'',mail:it.mail||''}; db.commerciaux.push(nc); comMap[it.id]=nc.id; } });
+    // poses : remap + dé-doublonnage
+    let addP=0; (o.poses||[]).forEach(p=>{ const techId=techMap[p.techId]||p.techId;
+      const commercialId=p.commercialId?(comMap[p.commercialId]||p.commercialId):'';
+      const dup=db.poses.some(x=>x.date===p.date&&x.techId===techId&&x.type===p.type&&(x.label||'')===(p.label||'')&&(x.note||'')===(p.note||''));
+      if(!dup){ const np={id:uid(),type:p.type,date:p.date,techId,note:p.note||''}; if(p.label)np.label=p.label; if(commercialId)np.commercialId=commercialId; if(p.chantierId)np.chantierId=p.chantierId; if(p.groupId)np.groupId=p.groupId; if(p.astreinteAuto)np.astreinteAuto=true; db.poses.push(np); addP++; } });
+    // chantiers : remap + dé-doublonnage (client+1er mois)
+    let addC=0; (o.chantiers||[]).forEach(c=>{ const ms=c.moisHeures?Object.keys(c.moisHeures).sort():(c.mois?[c.mois]:[]);
+      const key=norm(c.client)+'|'+(ms[0]||'');
+      const dup=db.chantiers.some(x=>{ const xm=(x.moisHeures?Object.keys(x.moisHeures).sort():(x.mois?[x.mois]:[])); return norm(x.client)===norm(c.client)&&(xm[0]||'')===(ms[0]||''); });
+      if(!dup){ db.seq=(db.seq||0)+1; db.chantiers.push({ id:uid(), ref:c.ref||('CH-'+(ms[0]||'').slice(0,4)+'-'+String(db.seq).padStart(3,'0')), client:c.client,
+        commercialId:c.commercialId?(comMap[c.commercialId]||''):'', adresse:c.adresse||'', tel:c.tel||'', moisHeures:c.moisHeures||(c.mois?{[c.mois]:c.heures||0}:{}),
+        heures:c.heures||0, techIds:(c.techIds||[]).map(id=>techMap[id]||id).filter(Boolean), materiel:c.materiel||'non', prio:c.prio||'normale', desc:c.desc||'', statut:c.statut||'previsionnel', devisFile:c.devisFile||null }); addC++; } });
+    persist(); updateBadges(); showView('chantiers');
+    alert('Fusion terminée : '+addC+' chantier(s) ajouté(s), '+addP+' tâche(s) de planning ajoutée(s). Techniciens conservés.');
+  }; r.readAsText(f,'UTF-8');
+}
+
+/* ===== Badges / utils ===== */
+function updateBadges(){ const n=db.chantiers.filter(matAlertActive).length; const b=document.getElementById('chantBadge'); if(b) b.textContent=n||''; }
+function val(id){ const e=document.getElementById(id); return e?e.value:''; }
+function v(id,x){ const e=document.getElementById(id); if(e) e.value=x; }
+
+/* ===== Init ===== */
+updateBadges();
+showView('plantech');
+</script>
+</body>
+</html>
