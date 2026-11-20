@@ -204,7 +204,8 @@
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Glissez un type sur une case, puis cliquez-le pour régler la durée.</div>
         <div id="typeBanner" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
         <h4>Chantiers à planifier</h4>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Glissez une carte sur chaque jour / technicien voulu.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Glissez une carte sur chaque jour / technicien, ou cliquez une case du planning.</div>
+        <input id="searchPlanChantier" oninput="renderBanner()" placeholder="🔎 Rechercher un chantier…" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:8px;border:1px solid var(--bord);border-radius:8px;font-size:13px">
         <div id="chantierBanner"></div>
       </div>
       <div class="plan-grid-wrap"><div id="planGridWrap"></div></div>
@@ -346,6 +347,8 @@
   </div>
   <div class="mfield"><label>Technicien(s) pressenti(s)</label>
     <div id="chTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:120px;overflow:auto"></div></div>
+  <div class="mfield"><label>Date de pose définitive (place automatiquement le chantier sur le planning des techniciens pressentis)</label>
+    <input id="chPoseDate" type="date"></div>
   <div class="mrow">
     <div class="mfield"><label>Matériel commandé ?</label>
       <select id="chMat"><option value="non">Non</option><option value="oui">Oui</option></select></div>
@@ -383,6 +386,17 @@
     <button onclick="closeTech()">Annuler</button>
     <button class="primary" onclick="saveTech()">Enregistrer</button>
   </div>
+</div></div>
+
+<!-- MODALE SÉLECTEUR DE CASE (ajout chantier par recherche, ou type) -->
+<div class="modal-bg" id="cellPickBg"><div class="modal">
+  <h3 id="cellPickTitle">Ajouter au planning</h3>
+  <div class="mfield"><label>Rechercher un chantier à poser</label>
+    <input id="cellSearch" oninput="renderCellPick()" placeholder="Nom du client ou réf…"></div>
+  <div id="cellPickList" style="max-height:280px;overflow:auto;border:1px solid var(--bord);border-radius:8px"></div>
+  <div style="margin-top:14px;font-size:12px;color:var(--muted)">Ou poser une absence / intervention sur cette case :</div>
+  <div id="cellPickTypes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+  <div class="modal-actions"><button onclick="closeCellPick()">Fermer</button></div>
 </div></div>
 
 <!-- MODALE ÉVÉNEMENT (absence / astreinte manuelle / autre) -->
@@ -699,7 +713,7 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
   const sel=new Set((c&&c.techIds)|| (c&&c.techPressenti?[c.techPressenti]:[]) || []);
   document.getElementById('chTechs').innerHTML = db.techniciens.length ? db.techniciens.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="chtk" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${esc(t.nom)}</label>`).join('') : '<span style="color:var(--muted);font-size:12px">Aucun technicien créé.</span>';
   document.getElementById('chCom').innerHTML='<option value="">—</option>'+db.commerciaux.map(x=>`<option value="${x.id}" ${c&&c.commercialId===x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
-  v('chClient',c&&c.client||''); v('chSign',c&&c.dateSignature||''); v('chAdresse',c&&c.adresse||''); v('chTel',c&&c.tel||''); v('chNbTech',(c&&c.nbTechs)||1);
+  v('chClient',c&&c.client||''); v('chSign',c&&c.dateSignature||''); v('chAdresse',c&&c.adresse||''); v('chTel',c&&c.tel||''); v('chNbTech',(c&&c.nbTechs)||1); v('chPoseDate',c&&c.poseDate||'');
   v('chDuree',c&&c.duree||1); v('chMat',c&&c.materiel||'non'); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||''); v('chLien',c&&c.lien||'');
   document.getElementById('chRepas').checked = !!(c&&c.repasExt);
   chFilesTmp = (c&&c.files)? c.files.slice() : (c&&c.devisFile? [c.devisFile] : []); renderFilesInfo();
@@ -723,10 +737,11 @@ function saveChantier(){
   const c={ id:editChId||uid(), ref:'', client:val('chClient').trim(), commercialId:val('chCom'), dateSignature:val('chSign'),
     adresse:val('chAdresse').trim(), tel:val('chTel').trim(), nbTechs:Math.max(1,parseInt(val('chNbTech'))||1), moisHeures, heures:Object.values(moisHeures).reduce((s,h)=>s+h,0),
     techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), materiel:val('chMat'), prio:val('chPrio'), desc:val('chDesc').trim(),
-    lien:val('chLien').trim(), repasExt:document.getElementById('chRepas').checked, files:chFilesTmp.slice(), devisFile:chFilesTmp[0]||null };
+    lien:val('chLien').trim(), repasExt:document.getElementById('chRepas').checked, files:chFilesTmp.slice(), devisFile:chFilesTmp[0]||null, poseDate:val('chPoseDate') };
   if(!c.client){ alert('Indiquez le client / chantier.'); return; }
   if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
   else { c.ref=nextRef(); c.statut='previsionnel'; db.chantiers.push(c); }
+  if(c.poseDate){ if(c.techIds&&c.techIds.length){ placeChantierDefinitif(c); } else { alert('Date de pose définie, mais aucun technicien pressenti coché : le chantier n\'a pas été placé automatiquement. Cochez un technicien ou placez-le à la main.'); } }
   persist(); closeChantier(); renderChantiers(); updateBadges();
   if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
   if(document.getElementById('view-prev').classList.contains('active')) renderPrev();
@@ -996,8 +1011,9 @@ function renderPlanning(){
 }
 function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML='<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
 function renderBanner(){
-  const box=document.getElementById('chantierBanner'); const list=chantiersToPlan().sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
-  if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">Aucun chantier à planifier.</div>'; return; }
+  const box=document.getElementById('chantierBanner'); const si=document.getElementById('searchPlanChantier'); const q=(si&&si.value||'').toLowerCase();
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
+  if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">'+(q?'Aucun chantier trouvé.':'Aucun chantier à planifier.')+'</div>'; return; }
   box.innerHTML=list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id);
     return `<div class="ch-card" draggable="true" style="border-left-color:${esc(chantierColor(c))}" ondragstart="chDragStart(event,'${c.id}')" ondragend="chDragEnd(event)">
       <div class="cc-nom">${esc(c.client)} ${placed?'<span style="color:var(--vert)">✓</span>':''}</div>
@@ -1031,7 +1047,31 @@ function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chI
     db.poses.push({id:uid(),type:'chantier',chantierId:chId,techId,date:ds,note:''}); }
   ch.statut='planifie'; persist(); renderPlanning();
 }
+function workDaysFrom(startStr, n){ const out=[]; let d=new Date(startStr+'T00:00:00'); let g=0; while(out.length<n && g<400){ g++; const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ymd(d))) out.push(ymd(d)); d.setDate(d.getDate()+1); } return out; }
+function placeChantierDefinitif(ch){
+  if(!ch.poseDate || !(ch.techIds&&ch.techIds.length)) return;
+  const crew=ch.techIds.length; const days=Math.max(1, Math.round(chHoursTotal(ch)/(crew*perDayHours())));
+  const dates=workDaysFrom(ch.poseDate, days);
+  db.poses=db.poses.filter(p=>p.chantierId!==ch.id);
+  ch.techIds.forEach(tid=>{ dates.forEach(ds=>{ db.poses.push({id:uid(),type:'chantier',chantierId:ch.id,techId:tid,date:ds,note:''}); }); });
+  ch.statut='planifie';
+}
 function unplaceChantier(id){ if(!confirm('Retirer ce chantier du planning (toutes ses tâches) ?')) return; db.poses=db.poses.filter(p=>p.chantierId!==id); const ch=db.chantiers.find(c=>c.id===id); if(ch&&ch.statut==='planifie') ch.statut='previsionnel'; persist(); renderPlanning(); }
+/* Clic sur une case vide : choisir un chantier (recherche) ou un type */
+let cellCtx=null;
+function openCellPick(ds,techId){ cellCtx={ds,techId}; const t=db.techniciens.find(x=>x.id===techId);
+  document.getElementById('cellPickTitle').textContent='Ajouter au planning — '+new Date(ds+'T00:00:00').toLocaleDateString('fr-FR')+' · '+(t?t.nom:'');
+  v('cellSearch',''); renderCellPick();
+  document.getElementById('cellPickTypes').innerHTML=DRAG_TYPES.map(([k,lbl])=>{ const col=(POSE_STATUS[k]||{}).color||'#64748b'; return `<button class="small" style="border-left:4px solid ${col};padding-left:8px" onclick="cellPickType('${k}')">${lbl}</button>`; }).join('')+`<button class="small" onclick="cellPickEvent()">＋ Détail / durée…</button>`;
+  document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellSearch'); if(s) s.focus();},50); }
+function closeCellPick(){ document.getElementById('cellPickBg').classList.remove('open'); }
+function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.client||'').localeCompare(b.client||'')).slice(0,80);
+  const box=document.getElementById('cellPickList');
+  box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
+function cellPickChantier(id){ if(!cellCtx) return; placeChantier(id, cellCtx.ds, cellCtx.techId); closeCellPick(); }
+function cellPickType(k){ if(!cellCtx) return; placeType(k, cellCtx.ds, cellCtx.techId); closeCellPick(); }
+function cellPickEvent(){ if(!cellCtx) return; const c=cellCtx; closeCellPick(); openEvent(null,c.ds,c.techId); }
 function finishChantier(id){ const ch=db.chantiers.find(c=>c.id===id); if(ch) ch.statut='termine'; persist(); renderPlanning(); updateBadges(); }
 
 /* Clic sur une tâche : édition durée (jours hors week-end) */
@@ -1092,7 +1132,7 @@ function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
 
 /* ===== Événement (absence / astreinte manuelle) ===== */
 let editEvId=null;
-function cellClick(ds,techId){ openEvent(null,ds,techId); }
+function cellClick(ds,techId){ openCellPick(ds,techId); }
 function openEvent(p,ds,techId){ editEvId=p?p.id:null;
   document.getElementById('evTitle').textContent=p?'Modifier':'Ajouter au planning';
   v('evType',p&&p.type||'conge'); v('evDate',p?p.date:(ds||ymd(new Date()))); v('evFin','');
