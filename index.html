@@ -294,8 +294,12 @@
         <input id="pMatSem" type="number" min="0" step="1" onchange="saveParams()"></div>
       <div class="mfield"><label>Heures / semaine (base capacité montage)</label>
         <input id="pHSem" type="number" min="1" step="1" onchange="saveParams()"></div>
-      <div class="mfield"><label>Heures de pose / jour / technicien (durée des chantiers : 16 h = 1 j à 2 techniciens)</label>
-        <input id="pHJour" type="number" min="1" step="0.5" onchange="saveParams()"></div>
+      <div class="mrow">
+        <div class="mfield"><label>Heures de pose / jour / technicien (lun.-jeu.)</label>
+          <input id="pHJour" type="number" min="1" step="0.5" onchange="saveParams()"></div>
+        <div class="mfield"><label>Heures le vendredi / technicien</label>
+          <input id="pHVendredi" type="number" min="0" step="0.5" onchange="saveParams()"></div>
+      </div>
       <div class="mfield"><label>Mot de passe espace gestion</label>
         <input id="pPass" onchange="saveParams()"></div>
       <div class="mfield"><label>Adresse du dépôt (page technicien GitHub Pages)</label>
@@ -512,10 +516,10 @@ const DBKEY='acf_planning_chantiers_v1';
 let db=load();
 function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.chantiers){ migr(d); return d; } }catch(e){}
   return { techniciens:[], commerciaux:[], chantiers:[], poses:[], astreinteOrder:[], seq:0,
-    params:{matSem:4, hSem:39, hJour:8, pass:'Chappert1188@&!81', pages:'https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'},
+    params:{matSem:4, hSem:39, hJour:8, hVendredi:7, pass:'Chappert1188@&!81', pages:'https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'},
     logo:DEFAULT_LOGO }; }
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
-  d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
+  d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.hVendredi==null)d.params.hVendredi=7; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
   if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
   d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien=''; }); }
 function persistLocal(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){} }
@@ -799,9 +803,9 @@ function dateChantiersByNum(){
 function roleMonteurs(){ return db.techniciens.filter(t=>(t.role||'')==='montage'); }
 function workingDaysInMonth(y,m0){ const hol=frenchHolidays(y); let n=0; const d=new Date(y,m0,1); while(d.getMonth()===m0){ const w=d.getDay(); if(w>=1&&w<=5&&!hol.has(ymd(d))) n++; d.setDate(d.getDate()+1); } return n; }
 function absenceDaysMonth(techId,y,m0){ const hol=frenchHolidays(y); let n=0; db.poses.forEach(p=>{ if(p.techId===techId&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')&&p.date){ const dt=new Date(p.date+'T00:00:00'); if(dt.getFullYear()===y&&dt.getMonth()===m0){ const w=dt.getDay(); if(w>=1&&w<=5&&!hol.has(p.date)) n++; } } }); return n; }
-function dispoMontageHours(mk){ const p=(mk||'').split('-'); const y=+p[0],m0=+p[1]-1; if(!y||m0<0) return 0; const wd=workingDaysInMonth(y,m0); const perDay=perDayHours(); let tot=0; roleMonteurs().forEach(t=>tot+=(wd-absenceDaysMonth(t.id,y,m0))*perDay); return Math.round(tot); }
+function dispoMontageHours(mk){ const pp=(mk||'').split('-'); const y=+pp[0],m0=+pp[1]-1; if(!y||m0<0) return 0; const hol=frenchHolidays(y); const monteurs=roleMonteurs(); let tot=0; const d=new Date(y,m0,1); while(d.getMonth()===m0){ const w=d.getDay(); if(w>=1&&w<=5&&!hol.has(ymd(d))){ const h=hoursForDay(d); const ds=ymd(d); monteurs.forEach(t=>{ const off=db.poses.some(p=>p.techId===t.id&&p.date===ds&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')); if(!off) tot+=h; }); } d.setDate(d.getDate()+1); } return Math.round(tot); }
 /* heures déjà posées fermement (chantiers sur le planning) dans le mois */
-function committedMonthHours(mk){ const pp=(mk||'').split('-'); const y=+pp[0],m=+pp[1]; const ids=new Set(roleMonteurs().map(t=>t.id)); let tot=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&ids.has(p.techId)&&p.date){ const q=p.date.split('-'); if(+q[0]===y&&+q[1]===m) tot+=perDayHours(); } }); return Math.round(tot); }
+function committedMonthHours(mk){ const pp=(mk||'').split('-'); const y=+pp[0],m=+pp[1]; const ids=new Set(roleMonteurs().map(t=>t.id)); let tot=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&ids.has(p.techId)&&p.date){ const q=p.date.split('-'); if(+q[0]===y&&+q[1]===m) tot+=hoursForDateStr(p.date); } }); return Math.round(tot); }
 /* Hypothèse congés : moyenne de jours de congé par technicien montage sur les 6 prochains mois,
    répartie au prorata des jours ouvrés pour réduire la capacité prévisionnelle. */
 function todayMid(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
@@ -837,10 +841,13 @@ function levelPrev(){
 
 /* ===== Moteur de proposition (1er signé = 1er installé, capacité pool heures) ===== */
 function perDayHours(){ return db.params.hJour||8; }
+function friHours(){ return (db.params&&db.params.hVendredi!=null)?db.params.hVendredi:7; }
+function hoursForDay(d){ return d.getDay()===5 ? friHours() : perDayHours(); }
+function hoursForDateStr(ds){ return hoursForDay(new Date(ds+'T00:00:00')); }
 function isWorkDay(d){ const w=d.getDay(); if(w<1||w>5) return false; return !frenchHolidays(d.getFullYear()).has(ymd(d)); }
 function montageAvailOnDay(dstr){ let n=0; roleMonteurs().forEach(t=>{ const off=db.poses.some(p=>p.techId===t.id&&p.date===dstr&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')); if(!off) n++; }); return n; }
-function committedChantierHoursOnDay(dstr){ const ids=new Set(roleMonteurs().map(t=>t.id)); let n=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&p.date===dstr&&ids.has(p.techId)) n++; }); return n*perDayHours(); }
-function freeCapacityOnDay(d){ if(!isWorkDay(d)) return 0; const dstr=ymd(d); let cap=montageAvailOnDay(dstr)*perDayHours() - committedChantierHoursOnDay(dstr); if(d>=todayMid()&&d<=horizon6End()) cap-=congesReductionPerDay(); return Math.max(0, cap); }
+function committedChantierHoursOnDay(dstr){ const ids=new Set(roleMonteurs().map(t=>t.id)); let n=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&p.date===dstr&&ids.has(p.techId)) n++; }); return n*hoursForDateStr(dstr); }
+function freeCapacityOnDay(d){ if(!isWorkDay(d)) return 0; const dstr=ymd(d); let cap=montageAvailOnDay(dstr)*hoursForDay(d) - committedChantierHoursOnDay(dstr); if(d>=todayMid()&&d<=horizon6End()) cap-=congesReductionPerDay(); return Math.max(0, cap); }
 function isPlaced(c){ return db.poses.some(p=>p.chantierId===c.id); }
 function chSigDate(c){ if(c.dateSignature) return new Date(c.dateSignature+'T00:00:00'); const ms=chMonths(c); if(ms.length) return new Date(ms[0]+'-01T00:00:00'); return new Date(new Date().getFullYear(),0,1); }
 let lastPropo=null;
@@ -855,9 +862,9 @@ function scheduleRemain(){
   list.forEach(c=>{
     const sig=chSigDate(c); let start=new Date(sig); start.setDate(start.getDate()+matDays);
     if(start<today) start=new Date(today);
-    const nbTechs=Math.max(1,c.nbTechs||1); const crewCap=nbTechs*perDayHours();
+    const nbTechs=Math.max(1,c.nbTechs||1);
     let d=new Date(start), hoursLeft=chHoursTotal(c), firstDay=null, lastDay=null, days=[], guard=0;
-    while(hoursLeft>0.01 && guard<5000){ guard++; const f=freeOn(d); if(f>0){ const used=Math.min(f,hoursLeft,crewCap); if(used>0.001){ remain[ymd(d)]=f-used; hoursLeft-=used; if(!firstDay) firstDay=new Date(d); lastDay=new Date(d); days.push({date:ymd(d),hours:used}); } } d.setDate(d.getDate()+1); }
+    while(hoursLeft>0.01 && guard<5000){ guard++; const f=freeOn(d); const crewCap=nbTechs*hoursForDay(d); if(f>0){ const used=Math.min(f,hoursLeft,crewCap); if(used>0.001){ remain[ymd(d)]=f-used; hoursLeft-=used; if(!firstDay) firstDay=new Date(d); lastDay=new Date(d); days.push({date:ymd(d),hours:used}); } } d.setDate(d.getDate()+1); }
     results.push({c, sig, earliest:start, start:firstDay, end:lastDay, days, nbTechs, totalH:chHoursTotal(c), overflow:hoursLeft>0.01});
   });
   return {results, remain};
@@ -878,10 +885,10 @@ function estimatePose(hours, nbTechs, sigStr){
   const today=new Date(); today.setHours(0,0,0,0);
   const sig = sigStr? new Date(sigStr+'T00:00:00') : new Date(today);
   let start=new Date(sig); start.setDate(start.getDate()+matDays); if(start<today) start=new Date(today);
-  const crewCap=Math.max(1,nbTechs)*perDayHours();
+  const nbt=Math.max(1,nbTechs);
   const local=Object.assign({},remain);
   let d=new Date(start), hl=hours, fd=null, ld=null, nd=0, g=0;
-  while(hl>0.01 && g<5000){ g++; const s=ymd(d); let f=(local[s]!=null)?local[s]:freeCapacityOnDay(d); if(f>0){ const used=Math.min(f,hl,crewCap); if(used>0.001){ local[s]=f-used; hl-=used; if(!fd)fd=new Date(d); ld=new Date(d); nd++; } } d.setDate(d.getDate()+1); }
+  while(hl>0.01 && g<5000){ g++; const s=ymd(d); let f=(local[s]!=null)?local[s]:freeCapacityOnDay(d); const crewCap=nbt*hoursForDay(d); if(f>0){ const used=Math.min(f,hl,crewCap); if(used>0.001){ local[s]=f-used; hl-=used; if(!fd)fd=new Date(d); ld=new Date(d); nd++; } } d.setDate(d.getDate()+1); }
   return {start:fd, end:ld, days:nd, earliest:start, ok:hl<=0.01};
 }
 function renderDash(){
@@ -889,7 +896,7 @@ function renderDash(){
   const active=db.chantiers.filter(c=>c.statut!=='termine');
   const placed=active.filter(isPlaced), toPlan=active.filter(c=>!isPlaced(c));
   const hVendu=Math.round(active.reduce((s,c)=>s+chHoursTotal(c),0));
-  const hPlan=Math.round(db.poses.filter(p=>p.type==='chantier').length*perDayHours()); // heures réellement posées sur le planning
+  const hPlan=Math.round(db.poses.filter(p=>p.type==='chantier'&&p.date).reduce((s,p)=>s+hoursForDateStr(p.date),0)); // heures réellement posées (7 h le vendredi)
   const hToPlan=Math.max(0, hVendu-hPlan); // reste à poser
   const hDispo=Math.round(freeCapacityHorizon());
   const nMont=roleMonteurs().length;
@@ -1286,7 +1293,7 @@ table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dc
 <div style="text-align:center;color:#66707e;font-size:11px;margin-top:12px">SAS ACF CHAPPERT</div></div></body></html>`; }
 
 /* ===== Paramètres / sauvegarde ===== */
-function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
+function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pHVendredi',db.params.hVendredi!=null?db.params.hVendredi:7); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
 function renderStatutColors(){ const box=document.getElementById('statutColorsBox'); if(!box) return;
   const cw='style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer"'; const lw='style="display:inline-flex;align-items:center;gap:6px;font-size:13px"';
   box.innerHTML=`<label ${lw}><input type="color" value="${chDefaultColor()}" onchange="setChColorDefault(this.value)" ${cw}>Chantier sans commercial</label>`+
@@ -1295,7 +1302,7 @@ function setStatutColor(type,value){ db.params.statutColors=db.params.statutColo
 function setChColorDefault(value){ db.params.chColorDefault=value; persist(); refreshStatutViews(); }
 function resetStatutColors(){ db.params.statutColors={}; db.params.chColorDefault=''; persist(); renderStatutColors(); refreshStatutViews(); }
 function refreshStatutViews(){ if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
-function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); }
+function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.hVendredi=(val('pHVendredi')===''?7:parseFloat(val('pHVendredi'))); db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
 function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
 function exportData(){ const blob=new Blob([JSON.stringify(db)],{type:'application/json;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acf-planning-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
 function importData(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ e.target.value=''; let o; try{o=JSON.parse(ev.target.result);}catch(err){ alert('JSON illisible.'); return; }
