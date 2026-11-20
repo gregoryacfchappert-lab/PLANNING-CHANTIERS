@@ -95,14 +95,15 @@
   .plan-grid-wrap{flex:1;min-width:0;overflow-x:auto;}
   .plan-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--bord);border-radius:12px;overflow:hidden;table-layout:fixed;}
   .plan-table th,.plan-table td{border:1px solid var(--bord);vertical-align:top;}
-  .plan-corner{background:var(--bleu);color:#fff;text-align:center;padding:10px;width:120px;}
-  .plan-corner .wk{font-size:20px;font-weight:800;line-height:1;} .plan-corner .wl{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.85;}
-  .plan-th-tech{background:var(--gris);padding:9px 8px;text-align:center;font-size:13px;font-weight:700;}
-  .plan-day{background:var(--gris);width:120px;padding:9px;font-size:12px;}
-  .plan-day .dname{font-weight:700;text-transform:capitalize;color:var(--bleu);} .plan-day .ddate{color:var(--muted);}
-  .plan-cell{padding:4px;cursor:pointer;position:relative;height:66px;}
+  .plan-corner{background:var(--bleu);color:#fff;text-align:center;padding:10px;width:140px;}
+  .plan-corner .wk{font-size:24px;font-weight:800;line-height:1;} .plan-corner .wl{font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:.85;}
+  .plan-th-tech{background:var(--gris);padding:10px 8px;text-align:center;font-size:15px;font-weight:800;}
+  .plan-day{background:var(--gris);width:140px;padding:10px;font-size:14px;}
+  .plan-day .dname{font-weight:800;text-transform:capitalize;color:var(--bleu);font-size:15px;} .plan-day .ddate{color:var(--muted);font-size:13px;}
+  .plan-cell{padding:4px;cursor:pointer;position:relative;height:74px;}
+  .wk-title{margin:4px 0 8px;color:var(--bleu);font-weight:800;font-size:16px;} .wk-sep{height:26px;}
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
-  .plan-chip{border-radius:6px;padding:3px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;line-height:1.25;overflow:hidden;}
+  .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;}
   .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
   .plan-chip b{display:block;font-weight:700;}
   .plan-chip.dimmed{opacity:.7;font-style:italic;border:1px dashed #c7cdd6;} .plan-chip.dimmed b{text-decoration:line-through;}
@@ -614,12 +615,15 @@ function renderTech(){
   const list=db.techniciens.filter(t=>(t.nom||'').toLowerCase().includes(q));
   const w=document.getElementById('techTableWrap');
   if(!list.length){ w.innerHTML='<div class="empty">Aucun technicien.</div>'; return; }
-  w.innerHTML='<table class="grid"><thead><tr><th>Nom</th><th>Rôle</th><th>Astreinte</th><th>Téléphone</th><th></th></tr></thead><tbody>'+
-    list.map(t=>`<tr><td class="clic" onclick="openTechModal('${t.id}')"><b>${esc(t.nom)}</b></td>
+  w.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Utilisez les flèches ▲▼ pour régler l\'ordre des colonnes dans le planning.</div><table class="grid"><thead><tr><th>Ordre</th><th>Nom</th><th>Rôle</th><th>Astreinte</th><th>Téléphone</th><th></th></tr></thead><tbody>'+
+    list.map(t=>{ const idx=db.techniciens.findIndex(x=>x.id===t.id); return `<tr>
+      <td class="row-act" style="white-space:nowrap"><button class="small" onclick="moveTech('${t.id}',-1)" ${idx<=0?'disabled':''} title="Monter">▲</button><button class="small" onclick="moveTech('${t.id}',1)" ${idx>=db.techniciens.length-1?'disabled':''} title="Descendre">▼</button></td>
+      <td class="clic" onclick="openTechModal('${t.id}')"><b>${esc(t.nom)}</b></td>
       <td>${ROLE_LBL[t.role||'bureau']||'—'}${(t.role||'')==='montage'?' 🔧':''}</td>
       <td>${t.astreinte?'✅':'—'}</td><td>${esc(t.tel||'')}</td>
-      <td class="row-act"><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`).join('')+'</tbody></table>';
+      <td class="row-act"><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`; }).join('')+'</tbody></table>';
 }
+function moveTech(id,dir){ const i=db.techniciens.findIndex(t=>t.id===id); const j=i+dir; if(i<0||j<0||j>=db.techniciens.length) return; const a=db.techniciens; const tmp=a[i]; a[i]=a[j]; a[j]=tmp; persist(); renderTech(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); }
 let editTechId=null;
 function openTechModal(id){ editTechId=id||null; const t=id?db.techniciens.find(x=>x.id===id):null;
   document.getElementById('techModalTitle').textContent=t?'Modifier le technicien':'Nouveau technicien';
@@ -1001,21 +1005,20 @@ function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
 function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return '#1b3a8c'; } return (POSE_STATUS[p.type]||{}).color||'#64748b'; }
 function poseLabel(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return ch.client; } return p.label||'Chantier'; }
   if(p.type==='astreinte') return p.note?p.note:'Astreinte'; return (POSE_STATUS[p.type]||{}).label||p.type; }
-function buildGrid(ro){
-  if(!db.techniciens.length) return '<div class="empty">Ajoutez des techniciens pour construire le planning.</div>';
-  const wk=isoWeek(weekStart); const todayStr=ymd(new Date()); const end=new Date(weekStart); end.setDate(end.getDate()+5);
-  let html='<div style="margin-bottom:8px;color:var(--muted)">Semaine '+wk+' — du '+weekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</div>';
-  const minW=120+db.techniciens.length*92;
+function buildWeekTable(wkStart, ro){
+  const wk=isoWeek(wkStart); const todayStr=ymd(new Date()); const end=new Date(wkStart); end.setDate(end.getDate()+5);
+  let html='<div class="wk-title">Semaine '+wk+' — du '+wkStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</div>';
+  const minW=140+db.techniciens.length*112;
   html+='<table class="plan-table" style="min-width:'+minW+'px"><thead><tr><th class="plan-corner"><div class="wl">Sem.</div><div class="wk">'+wk+'</div></th>'+
     db.techniciens.map(t=>`<th class="plan-th-tech">${esc(t.nom)}</th>`).join('')+'</tr></thead><tbody>';
-  const weekHasManualAst=db.poses.some(p=>p.type==='astreinte'&&!p.astreinteAuto&&p.date>=ymd(weekStart)&&p.date<=ymd(new Date(weekStart.getTime()+6*864e5)));
-  for(let i=0;i<6;i++){ const d=new Date(weekStart); d.setDate(d.getDate()+i); const ds=ymd(d);
+  const weekHasManualAst=db.poses.some(p=>p.type==='astreinte'&&!p.astreinteAuto&&p.date>=ymd(wkStart)&&p.date<=ymd(new Date(wkStart.getTime()+6*864e5)));
+  for(let i=0;i<6;i++){ const d=new Date(wkStart); d.setDate(d.getDate()+i); const ds=ymd(d);
     html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+'</div></td>';
     html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
       if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ds)){ const st=POSE_STATUS[role]; defc=`<div class="plan-chip plan-default" style="background:${st.color};color:${textOn(st.color)}"><b>${st.label}</b></div>`; } }
-      return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':textOn(col);
+      return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
@@ -1023,6 +1026,11 @@ function buildGrid(ro){
       }).join('')+defc+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
     html+='</tr>'; }
   html+='</tbody></table>'; return html;
+}
+function buildGrid(ro){
+  if(!db.techniciens.length) return '<div class="empty">Ajoutez des techniciens pour construire le planning.</div>';
+  const w2=new Date(weekStart); w2.setDate(w2.getDate()+7);
+  return buildWeekTable(weekStart,ro)+'<div class="wk-sep"></div>'+buildWeekTable(w2,ro);
 }
 function renderPlanning(){
   document.getElementById('planLegend').innerHTML=legendHtml();
