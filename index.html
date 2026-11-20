@@ -102,6 +102,8 @@
   .plan-day .dname{font-weight:800;text-transform:capitalize;color:var(--bleu);font-size:15px;} .plan-day .ddate{color:var(--muted);font-size:13px;}
   .plan-cell{padding:4px;cursor:pointer;position:relative;height:74px;}
   .wk-title{margin:4px 0 8px;color:var(--bleu);font-weight:800;font-size:16px;} .wk-sep{height:26px;}
+  .plan-fit{width:100%;} .plan-fit .plan-corner,.plan-fit .plan-day{width:96px;}
+  .plan-fit .plan-chip{white-space:normal;word-break:break-word;}
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
   .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;}
   .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
@@ -1008,8 +1010,8 @@ function poseLabel(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.ch
 function buildWeekTable(wkStart, ro){
   const wk=isoWeek(wkStart); const todayStr=ymd(new Date()); const end=new Date(wkStart); end.setDate(end.getDate()+5);
   let html='<div class="wk-title">Semaine '+wk+' — du '+wkStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</div>';
-  const minW=140+db.techniciens.length*112;
-  html+='<table class="plan-table" style="min-width:'+minW+'px"><thead><tr><th class="plan-corner"><div class="wl">Sem.</div><div class="wk">'+wk+'</div></th>'+
+  const minW = ro ? (140+db.techniciens.length*112) : 0;
+  html+='<table class="plan-table'+(ro?'':' plan-fit')+'" style="min-width:'+minW+'px"><thead><tr><th class="plan-corner"><div class="wl">Sem.</div><div class="wk">'+wk+'</div></th>'+
     db.techniciens.map(t=>`<th class="plan-th-tech">${esc(t.nom)}</th>`).join('')+'</tr></thead><tbody>';
   const weekHasManualAst=db.poses.some(p=>p.type==='astreinte'&&!p.astreinteAuto&&p.date>=ymd(wkStart)&&p.date<=ymd(new Date(wkStart.getTime()+6*864e5)));
   for(let i=0;i<6;i++){ const d=new Date(wkStart); d.setDate(d.getDate()+i); const ds=ymd(d);
