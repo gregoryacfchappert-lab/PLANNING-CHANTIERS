@@ -452,6 +452,9 @@
   <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
   <div class="mfield" id="taskComRow" style="display:none"><label>Commercial (couleur de la case)</label><select id="taskCom"></select></div>
   <div class="mfield"><label>Note</label><input id="taskNote"></div>
+  <div class="mfield" id="taskAddRow" style="display:none"><label>Ajouter d'autres techniciens à ce chantier (mêmes jours)</label>
+    <div id="taskAddTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:110px;overflow:auto;margin-bottom:6px"></div>
+    <button class="small" onclick="addTechsToChantier()">＋ Ajouter ces techniciens</button></div>
   <div class="modal-actions">
     <button class="rouge" onclick="deleteTask()" style="margin-right:auto">Supprimer</button>
     <button onclick="closeTask()">Annuler</button>
@@ -1158,7 +1161,23 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
   const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
   document.getElementById('taskConvertBtn').style.display=(p.type==='autre')?'inline-flex':'none';
+  const ar=document.getElementById('taskAddRow');
+  if(p.type==='chantier'){
+    const match = p.chantierId ? (x=>x.type==='chantier'&&x.chantierId===p.chantierId) : (x=>blockFilter(taskCtx)(x));
+    const blockPoses=db.poses.filter(match);
+    const dates=[...new Set(blockPoses.map(x=>x.date))].sort();
+    const already=new Set(blockPoses.map(x=>x.techId));
+    taskAddCtx={chantierId:p.chantierId||'', label:p.label||'', commercialId:p.commercialId||'', dates};
+    const avail=db.techniciens.filter(t=>!already.has(t.id));
+    document.getElementById('taskAddTechs').innerHTML = avail.length? avail.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="atk" value="${t.id}"> ${esc(t.nom)}</label>`).join('') : '<span style="color:var(--muted);font-size:12px">Tous les techniciens sont déjà sur ce chantier.</span>';
+    ar.style.display='block';
+  } else ar.style.display='none';
   document.getElementById('taskBg').classList.add('open'); }
+let taskAddCtx=null;
+function addTechsToChantier(){ if(!taskAddCtx) return; const techs=[...document.querySelectorAll('#taskAddTechs .atk:checked')].map(c=>c.value); if(!techs.length){ alert('Cochez au moins un technicien.'); return; }
+  const {chantierId,label,commercialId,dates}=taskAddCtx;
+  techs.forEach(tid=>dates.forEach(ds=>{ const dup=db.poses.some(p=>p.type==='chantier'&&p.techId===tid&&p.date===ds&&(chantierId?p.chantierId===chantierId:(p.label||'')===(label||''))); if(!dup){ const np={id:uid(),type:'chantier',techId:tid,date:ds,note:''}; if(chantierId) np.chantierId=chantierId; else { if(label)np.label=label; if(commercialId)np.commercialId=commercialId; } db.poses.push(np); } }));
+  persist(); closeTask(); renderPlanning(); }
 function convertToChantier(){ if(!taskCtx||taskCtx.type!=='autre') return;
   taskCtx.type='chantier'; if(!taskCtx.label) taskCtx.label=(val('taskNote').trim()||'Chantier'); v('taskNote','');
   document.getElementById('taskName').textContent=taskCtx.label+' — Chantier';
