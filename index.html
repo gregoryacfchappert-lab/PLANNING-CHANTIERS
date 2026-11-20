@@ -896,7 +896,7 @@ function renderDash(){
   const active=db.chantiers.filter(c=>c.statut!=='termine');
   const placed=active.filter(isPlaced), toPlan=active.filter(c=>!isPlaced(c));
   const hVendu=Math.round(active.reduce((s,c)=>s+chHoursTotal(c),0));
-  const hPlan=Math.round(db.poses.filter(p=>p.type==='chantier'&&p.date).reduce((s,p)=>s+hoursForDateStr(p.date),0)); // heures réellement posées (7 h le vendredi)
+  const hPlan=Math.round(db.poses.filter(p=>p.type==='chantier'&&p.chantierId&&p.date).reduce((s,p)=>s+hoursForDateStr(p.date),0)); // heures posées des chantiers de la liste (rattachés à une fiche)
   const hToPlan=Math.max(0, hVendu-hPlan); // reste à poser
   const hDispo=Math.round(freeCapacityHorizon());
   const nMont=roleMonteurs().length;
