@@ -82,6 +82,7 @@
   .level-h{font-weight:700;color:var(--bleu);font-size:13px;margin-bottom:10px;}
   table.level-tbl{width:100%;margin:0;} table.level-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;} table.level-tbl td{font-size:13px;}
   .level-foot{margin-top:10px;font-weight:700;font-size:13px;}
+  .sync-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;display:inline-block;} .sync-dot.ok{background:#1a7f3c;} .sync-dot.err{background:var(--rouge);}
   table.propo-tbl{margin:0;width:100%;} table.propo-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;}
   /* Planning hebdo + bandeau */
   .plan-layout{display:flex;gap:14px;align-items:flex-start;}
@@ -115,6 +116,20 @@
 </head>
 <body>
 
+<!-- ÉCRAN DE CONNEXION (synchro cloud) -->
+<div id="loginBg" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1b3a8c,#0d1f4d);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:30px 28px;width:340px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.4)">
+    <div style="text-align:center;font-weight:800;color:#1b3a8c;font-size:20px;margin-bottom:4px">ACF CHAPPERT · Planning</div>
+    <div style="text-align:center;color:#64748b;font-size:13px;margin-bottom:18px">Connexion requise pour accéder au planning partagé</div>
+    <label style="font-size:12px;color:#64748b">E-mail</label>
+    <input id="loginEmail" type="email" onkeyup="loginKey(event)" style="width:100%;padding:10px;margin:4px 0 12px;border:1px solid #d9dee7;border-radius:8px;box-sizing:border-box">
+    <label style="font-size:12px;color:#64748b">Mot de passe</label>
+    <input id="loginPass" type="password" onkeyup="loginKey(event)" style="width:100%;padding:10px;margin:4px 0 12px;border:1px solid #d9dee7;border-radius:8px;box-sizing:border-box">
+    <button onclick="doLogin()" style="width:100%;padding:11px;background:#1b3a8c;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Se connecter</button>
+    <div id="loginErr" style="color:#e2231a;font-size:12px;margin-top:10px;min-height:16px;text-align:center"></div>
+  </div>
+</div>
+
 <div class="topnav" id="topnav">
   <span class="brand">ACF <span>CHAPPERT</span> · Planning</span>
   <button class="navlink" id="nav-dash" onclick="showView('dash')">Tableau de bord</button>
@@ -128,6 +143,7 @@
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
   <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
+  <span id="userBadge" style="display:none;align-items:center;gap:6px;margin-left:10px;font-size:12px;color:var(--muted)"><span class="sync-dot" id="syncDot"></span><span></span><button class="ghost small" onclick="doLogout()" title="Se déconnecter">⎋</button></span>
 </div>
 
 <!-- VUE PLANNING TECHNICIEN (plein écran, lecture seule) -->
@@ -442,7 +458,20 @@
   </div>
 </div></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
+/* ===== Configuration Firebase (clés publiques, synchro multi-postes) ===== */
+const FB_CONFIG={
+  apiKey:"AIzaSyD1vlNpipMP7OXoaHDJ6oFgI_KLh4l9d4c",
+  authDomain:"planning-acf-chappert.firebaseapp.com",
+  databaseURL:"https://planning-acf-chappert-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"planning-acf-chappert",
+  storageBucket:"planning-acf-chappert.firebasestorage.app",
+  messagingSenderId:"969376699650",
+  appId:"1:969376699650:web:ec596566d7b1f3ff1d5e1b"
+};
 /* ===== Logo ===== */
 const DEFAULT_LOGO="data:image/svg+xml;base64,"+btoa(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 210'>
 <g fill='none' stroke-width='11' stroke-linecap='round'><path d='M60 18 C15 55 15 155 60 192' stroke='#1b3a8c'/><path d='M60 18 C40 30 28 40 22 55' stroke='#e2231a'/>
@@ -464,7 +493,57 @@ function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||
   d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
   if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
   d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien=''; }); }
-function persist(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){ alert('Sauvegarde impossible (espace saturé).'); } }
+function persistLocal(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){} }
+function persist(){ persistLocal(); if(cloudOn) schedulePush(); }
+/* ===== Synchro cloud (Firebase Realtime Database) ===== */
+const CLOUD_KEYS=['techniciens','commerciaux','chantiers','poses','astreinteOrder','params','seq','logo'];
+const LIST_KEYS=['techniciens','commerciaux','chantiers','poses','astreinteOrder'];
+let fbAuth=null, fbDb=null, cloudOn=false, _pushTimer=null; const _shadow={};
+function cloudDefault(k){ if(LIST_KEYS.includes(k)) return []; if(k==='params') return {}; if(k==='seq') return 0; if(k==='logo') return DEFAULT_LOGO; return null; }
+function coerceList(v){ if(v==null) return []; return Array.isArray(v)? v.filter(x=>x!=null) : Object.values(v); }
+function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; return d; }
+function clean(x){ return JSON.parse(JSON.stringify(x===undefined?null:x)); }
+function schedulePush(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(pushDiff, 600); }
+function pushDiff(){ if(!cloudOn||!fbDb) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
+function pushAll(){ if(!fbDb) return; const all={}; CLOUD_KEYS.forEach(k=>{ all[k]=clean(db[k]); _shadow[k]=JSON.stringify(db[k]); }); fbDb.ref('db').set(all).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('err')); }
+function setSyncStatus(s){ const el=document.getElementById('syncDot'); if(!el) return; el.className='sync-dot '+(s||''); el.title = s==='ok'?'Synchronisé':(s==='err'?'Erreur de synchro':'Hors ligne (local)'); }
+let currentView='plantech';
+function rerender(){ const v=currentView; const map={dash:renderDash,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
+function cloudInit(){
+  if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
+  try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
+  fbAuth=firebase.auth(); fbDb=firebase.database();
+  fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
+}
+function onSignedIn(u){
+  document.getElementById('loginBg').style.display='none';
+  const ub=document.getElementById('userBadge'); ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté';
+  fbDb.ref('db').once('value').then(snap=>{
+    const v=snap.val();
+    const cloudHas=v&&((v.chantiers&&coerceList(v.chantiers).length)||(v.techniciens&&coerceList(v.techniciens).length));
+    const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
+    if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
+    else { migr(db); pushAll(); }
+    cloudOn=true; persistLocal(); setSyncStatus('ok'); rerender();
+    CLOUD_KEYS.forEach(k=>{
+      fbDb.ref('db/'+k).on('value', s=>{
+        const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
+        if(js===_shadow[k]) return;
+        db[k]= LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val);
+        _shadow[k]=js; migr(db); persistLocal(); rerender();
+      });
+    });
+  }).catch(e=>{ setSyncStatus('err'); });
+}
+function doLogin(){
+  const email=val('loginEmail').trim(), pw=val('loginPass'); const err=document.getElementById('loginErr');
+  if(!email||!pw){ err.textContent='Saisissez e-mail et mot de passe.'; return; }
+  err.textContent='Connexion…';
+  fbAuth.signInWithEmailAndPassword(email,pw).then(()=>{ err.textContent=''; v('loginPass',''); }).catch(e=>{
+    err.textContent = /password|credential|invalid-login/i.test(e.code||'')?'E-mail ou mot de passe incorrect.':(e.message||'Échec de connexion.'); });
+}
+function doLogout(){ if(fbAuth&&confirm('Se déconnecter ?')) fbAuth.signOut(); }
+function loginKey(e){ if(e.key==='Enter') doLogin(); }
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>(s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let logoData=db.logo||DEFAULT_LOGO;
@@ -489,6 +568,7 @@ const POSE_STATUS={astreinte:{label:'Astreinte',color:'#7c3aed'},conge:{label:'C
 /* ===== Navigation ===== */
 let adminUnlocked=false;
 function showView(v){
+  currentView=v;
   ['plantech','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
   document.getElementById('topnav').style.display=(v==='plantech')?'none':'flex';
   ['dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
@@ -1159,6 +1239,7 @@ function v(id,x){ const e=document.getElementById(id); if(e) e.value=x; }
 /* ===== Init ===== */
 updateBadges();
 showView('plantech');
+cloudInit();
 </script>
 </body>
 </html>
