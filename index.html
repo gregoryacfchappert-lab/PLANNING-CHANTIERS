@@ -389,9 +389,8 @@
     <div class="mfield"><label>Astreinte</label>
       <select id="tAstreinte"><option value="non">Non concerné</option><option value="oui">Dans la boucle</option></select></div>
   </div>
-  <div class="mfield" id="tCoursRow" style="display:none"><label>Semaines de cours (apprenti) — format année-semaine, séparées par des virgules. Ex : 2026-37, 2026-45, 2027-3</label>
-    <input id="tCours" placeholder="2026-37, 2026-45, 2027-3…"></div>
-  <div style="font-size:11px;color:var(--muted);margin:-6px 0 4px" id="tCoursHint"></div>
+  <div class="mfield" id="tCoursRow" style="display:none"><label>Semaines de cours (apprenti) — cochez les semaines d'école, par année</label>
+    <div id="tCoursWeeks" style="max-height:220px;overflow:auto;border:1px solid var(--bord);border-radius:8px;padding:8px"></div></div>
   <div class="modal-actions">
     <button class="rouge" id="tDelBtn" onclick="deleteTech()" style="margin-right:auto;display:none">Supprimer</button>
     <button onclick="closeTech()">Annuler</button>
@@ -634,11 +633,19 @@ function moveTech(id,dir){ const i=db.techniciens.findIndex(t=>t.id===id); const
 let editTechId=null;
 function openTechModal(id){ editTechId=id||null; const t=id?db.techniciens.find(x=>x.id===id):null;
   document.getElementById('techModalTitle').textContent=t?'Modifier le technicien':'Nouveau technicien';
-  v('tNom',t&&t.nom||''); v('tTel',t&&t.tel||''); v('tRole',t&&t.role||'montage'); v('tAstreinte',t&&t.astreinte?'oui':'non'); v('tCours',t&&t.coursWeeks||'');
-  tRoleChange();
+  v('tNom',t&&t.nom||''); v('tTel',t&&t.tel||''); v('tRole',t&&t.role||'montage'); v('tAstreinte',t&&t.astreinte?'oui':'non');
+  renderCoursWeeks(t&&t.coursWeeks||''); tRoleChange();
   document.getElementById('tDelBtn').style.display=t?'inline-flex':'none';
   document.getElementById('techBg').classList.add('open'); }
 function tRoleChange(){ document.getElementById('tCoursRow').style.display = val('tRole')==='apprenti'?'block':'none'; }
+function renderCoursWeeks(selectedStr){ const box=document.getElementById('tCoursWeeks'); if(!box) return;
+  const sel=new Set(parseCoursWeeks(selectedStr).map(o=>o.y+'-'+o.w)); const y0=new Date().getFullYear(); let h='';
+  for(let y=y0;y<=y0+1;y++){ h+=`<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:13px;color:var(--bleu)">${y}</b><button type="button" class="small" onclick="toggleYearCours(${y},true)">Tout cocher</button><button type="button" class="small" onclick="toggleYearCours(${y},false)">Décocher</button></div><div style="display:flex;flex-wrap:wrap;gap:3px 5px">`;
+    for(let w=1;w<=53;w++){ const id=y+'-'+w; h+=`<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;border:1px solid var(--bord);border-radius:5px;padding:2px 5px;cursor:pointer"><input type="checkbox" class="cw" data-y="${y}" data-w="${w}" ${sel.has(id)?'checked':''} style="margin:0">${w}</label>`; }
+    h+='</div></div>'; }
+  box.innerHTML=h; }
+function toggleYearCours(y,on){ document.querySelectorAll('#tCoursWeeks .cw[data-y="'+y+'"]').forEach(c=>{ c.checked=on; }); }
+function collectCoursWeeks(){ return [...document.querySelectorAll('#tCoursWeeks .cw:checked')].map(c=>c.dataset.y+'-'+c.dataset.w).join(', '); }
 function closeTech(){ document.getElementById('techBg').classList.remove('open'); }
 /* Lundi de la semaine ISO (année, n°) */
 function mondayOfISOWeek(y,w){ const jan4=new Date(y,0,4); const dow=(jan4.getDay()+6)%7; const mon=new Date(jan4); mon.setDate(jan4.getDate()-dow+(w-1)*7); return mon; }
@@ -648,7 +655,7 @@ function applyCoursWeeks(t){
   if(t.role!=='apprenti'||!t.coursWeeks) return;
   parseCoursWeeks(t.coursWeeks).forEach(({y,w})=>{ if(w<1||w>53) return; const mon=mondayOfISOWeek(y,w); for(let i=0;i<5;i++){ const d=new Date(mon); d.setDate(mon.getDate()+i); const ds=ymd(d); if(frenchHolidays(d.getFullYear()).has(ds)) continue; if(!db.poses.some(p=>p.techId===t.id&&p.date===ds&&p.type==='cours')) db.poses.push({id:uid(),type:'cours',techId:t.id,date:ds,note:'Cours',auto:'cours'}); } });
 }
-function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel:val('tTel').trim(), role:val('tRole'), astreinte:val('tAstreinte')==='oui', coursWeeks:(val('tRole')==='apprenti'?val('tCours').trim():'') };
+function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel:val('tTel').trim(), role:val('tRole'), astreinte:val('tAstreinte')==='oui', coursWeeks:(val('tRole')==='apprenti'?collectCoursWeeks():'') };
   if(!t.nom){ alert('Nom requis.'); return; }
   if(editTechId){ const i=db.techniciens.findIndex(x=>x.id===editTechId); db.techniciens[i]=t; } else db.techniciens.push(t);
   applyCoursWeeks(t);
