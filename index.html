@@ -440,6 +440,7 @@
     <div class="mfield" style="flex:0 0 200px"><label>Durée (jours, hors week-end)</label><input id="taskDuree" type="number" min="1" step="1" value="1"></div>
   </div>
   <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
+  <div class="mfield" id="taskComRow" style="display:none"><label>Commercial (couleur de la case)</label><select id="taskCom"></select></div>
   <div class="mfield"><label>Note</label><input id="taskNote"></div>
   <div class="modal-actions">
     <button class="rouge" onclick="deleteTask()" style="margin-right:auto">Supprimer</button>
@@ -589,6 +590,7 @@ function textOn(hex){ const c=(hex||'').replace('#',''); if(c.length<6) return '
 /* ===== Statuts planning ===== */
 const POSE_STATUS={astreinte:{label:'Astreinte',color:'#7c3aed'},conge:{label:'Congé',color:'#eaff00'},maladie:{label:'Maladie',color:'#e2231a'},entretien:{label:'Entretien',color:'#f97316'},sav:{label:'SAV',color:'#1e3a8a'},cours:{label:'Cours',color:'#0891b2'},autre:{label:'Autre',color:'#64748b'}};
 function statusColor(type){ const c=(db.params&&db.params.statutColors||{})[type]; return c||((POSE_STATUS[type]||{}).color)||'#64748b'; }
+function chDefaultColor(){ return (db.params&&db.params.chColorDefault)||'#1b3a8c'; }
 
 /* ===== Navigation ===== */
 let adminUnlocked=false;
@@ -699,7 +701,7 @@ function chHoursTotal(ch){ if(ch.moisHeures) return Object.values(ch.moisHeures)
 function configMonths(){ const out=[]; const y0=new Date().getFullYear(); for(let y=y0;y<=y0+1;y++) for(let m=1;m<=12;m++) out.push(y+'-'+String(m).padStart(2,'0')); return out; }
 function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; const p=ms[0].split('-'); const d=new Date(+p[0], +p[1]-1, 1); d.setDate(d.getDate()-(db.params.matSem||4)*7); return d; }
 function matAlertActive(ch){ if(ch.materiel==='oui'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
-function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||'#1b3a8c'; } return ch.couleur||'#1b3a8c'; }
+function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||chDefaultColor(); } return ch.couleur||chDefaultColor(); }
 function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine'); }
 let chantierSort={key:'mois',dir:1};
 function setChantierSort(k){ if(chantierSort.key===k) chantierSort.dir*=-1; else chantierSort={key:k,dir:1}; renderChantiers(); }
@@ -1015,8 +1017,9 @@ function refreshPlanning(){ if(document.getElementById('view-plantech').classLis
 function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
 function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
   db.commerciaux.forEach(c=>h+=`<span><i style="background:${esc(c.couleur||'#1b3a8c')}"></i>${esc(c.nom)}</span>`);
+  h+=`<span><i style="background:${chDefaultColor()}"></i>Chantier sans commercial</span>`;
   Object.entries(POSE_STATUS).forEach(([k,s])=>h+=`<span><i style="background:${statusColor(k)}"></i>${s.label}</span>`); return h; }
-function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return '#1b3a8c'; } return statusColor(p.type); }
+function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return chDefaultColor(); } return statusColor(p.type); }
 function poseLabel(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return ch.client; } return p.label||'Chantier'; }
   if(p.type==='astreinte') return p.note?p.note:'Astreinte'; return (POSE_STATUS[p.type]||{}).label||p.type; }
 function buildWeekTable(wkStart, ro){
@@ -1132,12 +1135,16 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
   v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
   document.getElementById('taskTech').innerHTML=db.techniciens.map(t=>`<option value="${t.id}" ${t.id===p.techId?'selected':''}>${esc(t.nom)}</option>`).join('');
+  const isLabelCh=(p.type==='chantier'&&!p.chantierId);
+  const cr=document.getElementById('taskComRow'); cr.style.display=isLabelCh?'block':'none';
+  if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
   const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
   document.getElementById('taskBg').classList.add('open'); }
 function editFicheFromTask(){ const id=taskCtx&&taskCtx.chantierId; if(!id) return; closeTask(); openChantierModal(id); }
 function closeTask(){ document.getElementById('taskBg').classList.remove('open'); }
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
   if(!start||!techId){ alert('Date et technicien requis.'); return; }
+  if(ctx.type==='chantier'&&!ctx.chantierId){ ctx.commercialId=val('taskCom')||''; }
   // retire la partie du bloc à partir de la date cliquée
   db.poses=db.poses.filter(p=>!(blockFilter(ctx)(p)&&p.date>=ctx.date));
   const gid=ctx.chantierId? null : (ctx.groupId||uid());
@@ -1268,7 +1275,7 @@ function buildStandalone(){ const wk=isoWeek(weekStart); const end=new Date(week
     rows+=`<tr class="${ds===todayStr?'today':''}"><td class="day"><b>${JOURS[i]}</b><br><small>${d.toLocaleDateString('fr-FR')}</small></td>`;
     rows+=techs.map(t=>{ const ps=posesAt(ds,t.id); return '<td>'+ps.map(p=>{ const col=poseColor(p); return `<div class="chip" style="background:${col};color:${textOn(col)}"><b>${esc(poseLabel(p))}</b>${p.note&&p.type!=='astreinte'?'<br><small>'+esc(p.note)+'</small>':''}</div>`; }).join('')+'</td>'; }).join('');
     rows+='</tr>'; }
-  let leg='<span><i style="background:#1b3a8c"></i>Chantier</span>'+Object.entries(POSE_STATUS).map(([k,s])=>`<span><i style="background:${statusColor(k)}"></i>${s.label}</span>`).join('');
+  let leg='<span><i style="background:'+chDefaultColor()+'"></i>Chantier</span>'+Object.entries(POSE_STATUS).map(([k,s])=>`<span><i style="background:${statusColor(k)}"></i>${s.label}</span>`).join('');
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning semaine ${wk}</title>
 <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f4f5f7;color:#1f2733}.wrap{max-width:1100px;margin:0 auto;padding:14px}h1{color:#1b3a8c;font-size:19px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin:8px 0}.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -1281,9 +1288,12 @@ table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dc
 /* ===== Paramètres / sauvegarde ===== */
 function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
 function renderStatutColors(){ const box=document.getElementById('statutColorsBox'); if(!box) return;
-  box.innerHTML=Object.entries(POSE_STATUS).map(([k,s])=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="color" value="${statusColor(k)}" onchange="setStatutColor('${k}',this.value)" style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer">${esc(s.label)}</label>`).join(''); }
+  const cw='style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer"'; const lw='style="display:inline-flex;align-items:center;gap:6px;font-size:13px"';
+  box.innerHTML=`<label ${lw}><input type="color" value="${chDefaultColor()}" onchange="setChColorDefault(this.value)" ${cw}>Chantier sans commercial</label>`+
+    Object.entries(POSE_STATUS).map(([k,s])=>`<label ${lw}><input type="color" value="${statusColor(k)}" onchange="setStatutColor('${k}',this.value)" ${cw}>${esc(s.label)}</label>`).join(''); }
 function setStatutColor(type,value){ db.params.statutColors=db.params.statutColors||{}; db.params.statutColors[type]=value; persist(); refreshStatutViews(); }
-function resetStatutColors(){ db.params.statutColors={}; persist(); renderStatutColors(); refreshStatutViews(); }
+function setChColorDefault(value){ db.params.chColorDefault=value; persist(); refreshStatutViews(); }
+function resetStatutColors(){ db.params.statutColors={}; db.params.chColorDefault=''; persist(); renderStatutColors(); refreshStatutViews(); }
 function refreshStatutViews(){ if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
 function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); }
 function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
