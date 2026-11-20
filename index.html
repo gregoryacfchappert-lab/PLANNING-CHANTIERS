@@ -444,6 +444,7 @@
   <h3>Modifier la tâche</h3>
   <div class="mfield"><label>Tâche</label><div id="taskName" style="font-weight:700"></div></div>
   <button id="taskFicheBtn" class="ghost" style="display:none;margin-bottom:12px" onclick="editFicheFromTask()">✎ Modifier la fiche chantier</button>
+  <button id="taskConvertBtn" class="ghost" style="display:none;margin-bottom:12px" onclick="convertToChantier()">↦ Transformer en chantier libre</button>
   <div class="mrow">
     <div class="mfield"><label>Date de début</label><input id="taskDate" type="date"></div>
     <div class="mfield" style="flex:0 0 200px"><label>Durée (jours, hors week-end)</label><input id="taskDuree" type="number" min="1" step="1" value="1"></div>
@@ -1156,7 +1157,14 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   const cr=document.getElementById('taskComRow'); cr.style.display=isLabelCh?'block':'none';
   if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
   const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
+  document.getElementById('taskConvertBtn').style.display=(p.type==='autre')?'inline-flex':'none';
   document.getElementById('taskBg').classList.add('open'); }
+function convertToChantier(){ if(!taskCtx||taskCtx.type!=='autre') return;
+  taskCtx.type='chantier'; if(!taskCtx.label) taskCtx.label=(val('taskNote').trim()||'Chantier'); v('taskNote','');
+  document.getElementById('taskName').textContent=taskCtx.label+' — Chantier';
+  const cr=document.getElementById('taskComRow'); cr.style.display='block';
+  document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(taskCtx.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
+  document.getElementById('taskConvertBtn').style.display='none'; }
 function editFicheFromTask(){ const id=taskCtx&&taskCtx.chantierId; if(!id) return; closeTask(); openChantierModal(id); }
 function closeTask(){ document.getElementById('taskBg').classList.remove('open'); }
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
