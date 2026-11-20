@@ -300,6 +300,10 @@
         <input id="pPass" onchange="saveParams()"></div>
       <div class="mfield"><label>Adresse du dépôt (page technicien GitHub Pages)</label>
         <input id="pPages" onchange="saveParams()"></div>
+      <div class="mfield"><label>Couleurs des statuts du planning (Congé, Maladie, SAV, Entretien, Cours, Astreinte, Autre)</label>
+        <div id="statutColorsBox" style="display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:4px"></div>
+        <button class="ghost small" style="margin-top:8px" onclick="resetStatutColors()">↺ Réinitialiser les couleurs par défaut</button>
+      </div>
       <div class="mfield"><label>Logo</label>
         <button class="ghost small" onclick="document.getElementById('logoInput').click()">Changer le logo</button>
         <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="setLogo(event)">
@@ -585,6 +589,7 @@ function textOn(hex){ const c=(hex||'').replace('#',''); if(c.length<6) return '
 
 /* ===== Statuts planning ===== */
 const POSE_STATUS={astreinte:{label:'Astreinte',color:'#7c3aed'},conge:{label:'Congé',color:'#eaff00'},maladie:{label:'Maladie',color:'#e2231a'},entretien:{label:'Entretien',color:'#f97316'},sav:{label:'SAV',color:'#1e3a8a'},cours:{label:'Cours',color:'#0891b2'},autre:{label:'Autre',color:'#64748b'}};
+function statusColor(type){ const c=(db.params&&db.params.statutColors||{})[type]; return c||((POSE_STATUS[type]||{}).color)||'#64748b'; }
 
 /* ===== Navigation ===== */
 let adminUnlocked=false;
@@ -1003,8 +1008,8 @@ function refreshPlanning(){ if(document.getElementById('view-plantech').classLis
 function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
 function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
   db.commerciaux.forEach(c=>h+=`<span><i style="background:${esc(c.couleur||'#1b3a8c')}"></i>${esc(c.nom)}</span>`);
-  Object.values(POSE_STATUS).forEach(s=>h+=`<span><i style="background:${s.color}"></i>${s.label}</span>`); return h; }
-function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return '#1b3a8c'; } return (POSE_STATUS[p.type]||{}).color||'#64748b'; }
+  Object.entries(POSE_STATUS).forEach(([k,s])=>h+=`<span><i style="background:${statusColor(k)}"></i>${s.label}</span>`); return h; }
+function poseColor(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return chantierColor(ch); } if(p.commercialId) return comColor(p.commercialId); return '#1b3a8c'; } return statusColor(p.type); }
 function poseLabel(p){ if(p.type==='chantier'){ if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) return ch.client; } return p.label||'Chantier'; }
   if(p.type==='astreinte') return p.note?p.note:'Astreinte'; return (POSE_STATUS[p.type]||{}).label||p.type; }
 function buildWeekTable(wkStart, ro){
@@ -1019,7 +1024,7 @@ function buildWeekTable(wkStart, ro){
     html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
-      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ds)){ const st=POSE_STATUS[role]; defc=`<div class="plan-chip plan-default" style="background:${st.color};color:${textOn(st.color)}"><b>${st.label}</b></div>`; } }
+      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ds)){ const sc=statusColor(role); defc=`<div class="plan-chip plan-default" style="background:${sc};color:${textOn(sc)}"><b>${POSE_STATUS[role].label}</b></div>`; } }
       return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
@@ -1058,7 +1063,7 @@ function renderBanner(){
 /* Types à glisser (absences / interventions) */
 const DRAG_TYPES=[['conge','Congé'],['maladie','Maladie'],['entretien','Entretien'],['sav','SAV'],['cours','Cours'],['autre','Autre']];
 function renderTypeBanner(){ const box=document.getElementById('typeBanner'); if(!box) return;
-  box.innerHTML=DRAG_TYPES.map(([t,lbl])=>{ const col=(POSE_STATUS[t]||{}).color||'#64748b';
+  box.innerHTML=DRAG_TYPES.map(([t,lbl])=>{ const col=statusColor(t);
     return `<div class="ch-card" draggable="true" style="border-left-color:${col};padding:5px 9px;margin:0;font-size:12px;font-weight:600" ondragstart="typeDragStart(event,'${t}')" ondragend="chDragEnd(event)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:5px"></span>${lbl}</div>`; }).join(''); }
 /* Drag & drop */
 let dragChId=null, dragType=null;
@@ -1095,7 +1100,7 @@ let cellCtx=null;
 function openCellPick(ds,techId){ cellCtx={ds,techId}; const t=db.techniciens.find(x=>x.id===techId);
   document.getElementById('cellPickTitle').textContent='Ajouter au planning — '+new Date(ds+'T00:00:00').toLocaleDateString('fr-FR')+' · '+(t?t.nom:'');
   v('cellSearch',''); renderCellPick();
-  document.getElementById('cellPickTypes').innerHTML=DRAG_TYPES.map(([k,lbl])=>{ const col=(POSE_STATUS[k]||{}).color||'#64748b'; return `<button class="small" style="border-left:4px solid ${col};padding-left:8px" onclick="cellPickType('${k}')">${lbl}</button>`; }).join('')+`<button class="small" onclick="cellPickEvent()">＋ Détail / durée…</button>`;
+  document.getElementById('cellPickTypes').innerHTML=DRAG_TYPES.map(([k,lbl])=>{ const col=statusColor(k); return `<button class="small" style="border-left:4px solid ${col};padding-left:8px" onclick="cellPickType('${k}')">${lbl}</button>`; }).join('')+`<button class="small" onclick="cellPickEvent()">＋ Détail / durée…</button>`;
   document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellSearch'); if(s) s.focus();},50); }
 function closeCellPick(){ document.getElementById('cellPickBg').classList.remove('open'); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
@@ -1256,7 +1261,7 @@ function buildStandalone(){ const wk=isoWeek(weekStart); const end=new Date(week
     rows+=`<tr class="${ds===todayStr?'today':''}"><td class="day"><b>${JOURS[i]}</b><br><small>${d.toLocaleDateString('fr-FR')}</small></td>`;
     rows+=techs.map(t=>{ const ps=posesAt(ds,t.id); return '<td>'+ps.map(p=>{ const col=poseColor(p); return `<div class="chip" style="background:${col};color:${textOn(col)}"><b>${esc(poseLabel(p))}</b>${p.note&&p.type!=='astreinte'?'<br><small>'+esc(p.note)+'</small>':''}</div>`; }).join('')+'</td>'; }).join('');
     rows+='</tr>'; }
-  let leg='<span><i style="background:#1b3a8c"></i>Chantier</span>'+Object.values(POSE_STATUS).map(s=>`<span><i style="background:${s.color}"></i>${s.label}</span>`).join('');
+  let leg='<span><i style="background:#1b3a8c"></i>Chantier</span>'+Object.entries(POSE_STATUS).map(([k,s])=>`<span><i style="background:${statusColor(k)}"></i>${s.label}</span>`).join('');
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning semaine ${wk}</title>
 <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f4f5f7;color:#1f2733}.wrap{max-width:1100px;margin:0 auto;padding:14px}h1{color:#1b3a8c;font-size:19px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin:8px 0}.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -1267,7 +1272,12 @@ table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dc
 <div style="text-align:center;color:#66707e;font-size:11px;margin-top:12px">SAS ACF CHAPPERT</div></div></body></html>`; }
 
 /* ===== Paramètres / sauvegarde ===== */
-function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; }
+function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
+function renderStatutColors(){ const box=document.getElementById('statutColorsBox'); if(!box) return;
+  box.innerHTML=Object.entries(POSE_STATUS).map(([k,s])=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="color" value="${statusColor(k)}" onchange="setStatutColor('${k}',this.value)" style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer">${esc(s.label)}</label>`).join(''); }
+function setStatutColor(type,value){ db.params.statutColors=db.params.statutColors||{}; db.params.statutColors[type]=value; persist(); refreshStatutViews(); }
+function resetStatutColors(){ db.params.statutColors={}; persist(); renderStatutColors(); refreshStatutViews(); }
+function refreshStatutViews(){ if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
 function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); }
 function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
 function exportData(){ const blob=new Blob([JSON.stringify(db)],{type:'application/json;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acf-planning-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
