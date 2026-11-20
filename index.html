@@ -107,6 +107,7 @@
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
   .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;}
   .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
+  .plan-cell.plan-ferie{background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 6px,#e2e8f0 6px,#e2e8f0 12px);}
   .plan-chip b{display:block;font-weight:700;}
   .plan-chip.dimmed{opacity:.7;font-style:italic;border:1px dashed #c7cdd6;} .plan-chip.dimmed b{text-decoration:line-through;}
   .addp{position:absolute;bottom:3px;right:6px;color:var(--bord);font-size:15px;} .plan-cell:hover .addp{color:var(--bleu);}
@@ -405,10 +406,14 @@
 <!-- MODALE SÉLECTEUR DE CASE (ajout chantier par recherche, ou type) -->
 <div class="modal-bg" id="cellPickBg"><div class="modal">
   <h3 id="cellPickTitle">Ajouter au planning</h3>
-  <div class="mfield"><label>Rechercher un chantier à poser</label>
-    <input id="cellSearch" oninput="renderCellPick()" placeholder="Nom du client ou réf…"></div>
-  <div id="cellPickList" style="max-height:280px;overflow:auto;border:1px solid var(--bord);border-radius:8px"></div>
-  <div style="margin-top:14px;font-size:12px;color:var(--muted)">Ou poser une absence / intervention sur cette case :</div>
+  <div class="mfield"><label>Technicien(s) concerné(s)</label>
+    <div id="cellTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:110px;overflow:auto"></div></div>
+  <div class="mfield"><label>Nouveau chantier « libre » (saisie directe)</label>
+    <div style="display:flex;gap:8px"><input id="cellNewName" placeholder="Nom du chantier / tâche…" style="flex:1" onkeyup="if(event.key==='Enter')cellCreateFree()"><button class="primary" onclick="cellCreateFree()">＋ Placer</button></div></div>
+  <div class="mfield"><label>Ou poser un chantier existant</label>
+    <input id="cellSearch" oninput="renderCellPick()" placeholder="Rechercher par client ou réf…"></div>
+  <div id="cellPickList" style="max-height:220px;overflow:auto;border:1px solid var(--bord);border-radius:8px"></div>
+  <div style="margin-top:14px;font-size:12px;color:var(--muted)">Ou poser une absence / intervention :</div>
   <div id="cellPickTypes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
   <div class="modal-actions"><button onclick="closeCellPick()">Fermer</button></div>
 </div></div>
@@ -1037,11 +1042,13 @@ function buildWeekTable(wkStart, ro){
     db.techniciens.map(t=>`<th class="plan-th-tech">${esc(t.nom)}</th>`).join('')+'</tr></thead><tbody>';
   const weekHasManualAst=db.poses.some(p=>p.type==='astreinte'&&!p.astreinteAuto&&p.date>=ymd(wkStart)&&p.date<=ymd(new Date(wkStart.getTime()+6*864e5)));
   for(let i=0;i<6;i++){ const d=new Date(wkStart); d.setDate(d.getDate()+i); const ds=ymd(d);
-    html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+'</div></td>';
+    const ferie=frenchHolidays(d.getFullYear()).has(ds);
+    html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+(ferie?' · <b style="color:#64748b">Férié</b>':'')+'</div></td>';
     html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
+      if(ferie){ return '<td class="plan-cell plan-ferie"><div class="plan-chip" style="background:#cbd5e1;color:#334155;pointer-events:none"><b>Férié</b></div>'+ps.map(p=>{ const col=poseColor(p); const tc=(p.type==='chantier'?'#111':textOn(col)); const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`; return `<div class="plan-chip" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(poseLabel(p))}</b></div>`; }).join('')+'</td>'; }
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
-      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ds)){ const sc=statusColor(role); defc=`<div class="plan-chip plan-default" style="background:${sc};color:${textOn(sc)}"><b>${POSE_STATUS[role].label}</b></div>`; } }
+      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5){ const sc=statusColor(role); defc=`<div class="plan-chip plan-default" style="background:${sc};color:${textOn(sc)}"><b>${POSE_STATUS[role].label}</b></div>`; } }
       return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
@@ -1114,18 +1121,21 @@ function placeChantierDefinitif(ch){
 function unplaceChantier(id){ if(!confirm('Retirer ce chantier du planning (toutes ses tâches) ?')) return; db.poses=db.poses.filter(p=>p.chantierId!==id); const ch=db.chantiers.find(c=>c.id===id); if(ch&&ch.statut==='planifie') ch.statut='previsionnel'; persist(); renderPlanning(); }
 /* Clic sur une case vide : choisir un chantier (recherche) ou un type */
 let cellCtx=null;
-function openCellPick(ds,techId){ cellCtx={ds,techId}; const t=db.techniciens.find(x=>x.id===techId);
-  document.getElementById('cellPickTitle').textContent='Ajouter au planning — '+new Date(ds+'T00:00:00').toLocaleDateString('fr-FR')+' · '+(t?t.nom:'');
-  v('cellSearch',''); renderCellPick();
+function openCellPick(ds,techId){ cellCtx={ds,techId};
+  document.getElementById('cellPickTitle').textContent='Ajouter au planning — '+new Date(ds+'T00:00:00').toLocaleDateString('fr-FR');
+  document.getElementById('cellTechs').innerHTML=db.techniciens.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="ctk" value="${t.id}" ${t.id===techId?'checked':''}> ${esc(t.nom)}</label>`).join('');
+  v('cellSearch',''); v('cellNewName',''); renderCellPick();
   document.getElementById('cellPickTypes').innerHTML=DRAG_TYPES.map(([k,lbl])=>{ const col=statusColor(k); return `<button class="small" style="border-left:4px solid ${col};padding-left:8px" onclick="cellPickType('${k}')">${lbl}</button>`; }).join('')+`<button class="small" onclick="cellPickEvent()">＋ Détail / durée…</button>`;
-  document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellSearch'); if(s) s.focus();},50); }
+  document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellNewName'); if(s) s.focus();},50); }
 function closeCellPick(){ document.getElementById('cellPickBg').classList.remove('open'); }
+function cellCheckedTechs(){ const ids=[...document.querySelectorAll('#cellTechs .ctk:checked')].map(c=>c.value); return ids.length?ids:(cellCtx?[cellCtx.techId]:[]); }
+function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
   const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.client||'').localeCompare(b.client||'')).slice(0,80);
   const box=document.getElementById('cellPickList');
   box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
-function cellPickChantier(id){ if(!cellCtx) return; placeChantier(id, cellCtx.ds, cellCtx.techId); closeCellPick(); }
-function cellPickType(k){ if(!cellCtx) return; placeType(k, cellCtx.ds, cellCtx.techId); closeCellPick(); }
+function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:'chantier',chantierId:id,techId:tid,date:cellCtx.ds,note:''}); }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); }
+function cellPickType(k){ if(!cellCtx) return; const gid=uid(); cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.type===k&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:k,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); }
 function cellPickEvent(){ if(!cellCtx) return; const c=cellCtx; closeCellPick(); openEvent(null,c.ds,c.techId); }
 function finishChantier(id){ const ch=db.chantiers.find(c=>c.id===id); if(ch) ch.statut='termine'; persist(); renderPlanning(); updateBadges(); }
 
