@@ -103,6 +103,7 @@
   .plan-cell{padding:4px;cursor:pointer;position:relative;height:66px;}
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
   .plan-chip{border-radius:6px;padding:3px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;line-height:1.25;overflow:hidden;}
+  .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
   .plan-chip b{display:block;font-weight:700;}
   .plan-chip.dimmed{opacity:.7;font-style:italic;border:1px dashed #c7cdd6;} .plan-chip.dimmed b{text-decoration:line-through;}
   .addp{position:absolute;bottom:3px;right:6px;color:var(--bord);font-size:15px;} .plan-cell:hover .addp{color:var(--bleu);}
@@ -377,10 +378,13 @@
   <div class="mfield"><label>Téléphone (SMS)</label><input id="tTel"></div>
   <div class="mrow">
     <div class="mfield"><label>Fonction (seul Montage = capacité chantiers)</label>
-      <select id="tRole"><option value="montage">Montage</option><option value="apprenti">Apprenti</option><option value="sav">SAV</option><option value="entretien">Entretien</option><option value="bureau">Bureau</option></select></div>
+      <select id="tRole" onchange="tRoleChange()"><option value="montage">Montage</option><option value="apprenti">Apprenti</option><option value="sav">SAV</option><option value="entretien">Entretien</option><option value="bureau">Bureau</option></select></div>
     <div class="mfield"><label>Astreinte</label>
       <select id="tAstreinte"><option value="non">Non concerné</option><option value="oui">Dans la boucle</option></select></div>
   </div>
+  <div class="mfield" id="tCoursRow" style="display:none"><label>Semaines de cours (apprenti) — format année-semaine, séparées par des virgules. Ex : 2026-37, 2026-45, 2027-3</label>
+    <input id="tCours" placeholder="2026-37, 2026-45, 2027-3…"></div>
+  <div style="font-size:11px;color:var(--muted);margin:-6px 0 4px" id="tCoursHint"></div>
   <div class="modal-actions">
     <button class="rouge" id="tDelBtn" onclick="deleteTech()" style="margin-right:auto;display:none">Supprimer</button>
     <button onclick="closeTech()">Annuler</button>
@@ -619,14 +623,27 @@ function renderTech(){
 let editTechId=null;
 function openTechModal(id){ editTechId=id||null; const t=id?db.techniciens.find(x=>x.id===id):null;
   document.getElementById('techModalTitle').textContent=t?'Modifier le technicien':'Nouveau technicien';
-  v('tNom',t&&t.nom||''); v('tTel',t&&t.tel||''); v('tRole',t&&t.role||'montage'); v('tAstreinte',t&&t.astreinte?'oui':'non');
+  v('tNom',t&&t.nom||''); v('tTel',t&&t.tel||''); v('tRole',t&&t.role||'montage'); v('tAstreinte',t&&t.astreinte?'oui':'non'); v('tCours',t&&t.coursWeeks||'');
+  tRoleChange();
   document.getElementById('tDelBtn').style.display=t?'inline-flex':'none';
   document.getElementById('techBg').classList.add('open'); }
+function tRoleChange(){ document.getElementById('tCoursRow').style.display = val('tRole')==='apprenti'?'block':'none'; }
 function closeTech(){ document.getElementById('techBg').classList.remove('open'); }
-function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel:val('tTel').trim(), role:val('tRole'), astreinte:val('tAstreinte')==='oui' };
+/* Lundi de la semaine ISO (année, n°) */
+function mondayOfISOWeek(y,w){ const jan4=new Date(y,0,4); const dow=(jan4.getDay()+6)%7; const mon=new Date(jan4); mon.setDate(jan4.getDate()-dow+(w-1)*7); return mon; }
+function parseCoursWeeks(str){ const out=[]; (str||'').split(/[,;]+/).forEach(tok=>{ tok=tok.trim(); const m=tok.match(/^(\d{4})\D+(\d{1,2})$/); if(m) out.push({y:+m[1],w:+m[2]}); }); return out; }
+function applyCoursWeeks(t){
+  db.poses=db.poses.filter(p=>!(p.techId===t.id && p.type==='cours' && p.auto==='cours'));
+  if(t.role!=='apprenti'||!t.coursWeeks) return;
+  parseCoursWeeks(t.coursWeeks).forEach(({y,w})=>{ if(w<1||w>53) return; const mon=mondayOfISOWeek(y,w); for(let i=0;i<5;i++){ const d=new Date(mon); d.setDate(mon.getDate()+i); const ds=ymd(d); if(frenchHolidays(d.getFullYear()).has(ds)) continue; if(!db.poses.some(p=>p.techId===t.id&&p.date===ds&&p.type==='cours')) db.poses.push({id:uid(),type:'cours',techId:t.id,date:ds,note:'Cours',auto:'cours'}); } });
+}
+function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel:val('tTel').trim(), role:val('tRole'), astreinte:val('tAstreinte')==='oui', coursWeeks:(val('tRole')==='apprenti'?val('tCours').trim():'') };
   if(!t.nom){ alert('Nom requis.'); return; }
   if(editTechId){ const i=db.techniciens.findIndex(x=>x.id===editTechId); db.techniciens[i]=t; } else db.techniciens.push(t);
-  persist(); closeTech(); renderTech(); }
+  applyCoursWeeks(t);
+  persist(); closeTech(); renderTech();
+  if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
+  if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
 function deleteTech(){ if(!editTechId) return; if(!confirm('Supprimer ce technicien ?')) return; db.techniciens=db.techniciens.filter(t=>t.id!==editTechId); persist(); closeTech(); renderTech(); }
 
 /* ===== Commerciaux ===== */
@@ -996,12 +1013,14 @@ function buildGrid(ro){
     html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+'</div></td>';
     html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
+      let defc=''; const role=t.role||'';
+      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ds)){ const st=POSE_STATUS[role]; defc=`<div class="plan-chip plan-default" style="background:${st.color};color:${textOn(st.color)}"><b>${st.label}</b></div>`; } }
       return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':textOn(col);
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
         return `<div class="plan-chip${dim?' dimmed':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}${repas?' 🍽':''}</b>${sub?esc(sub.slice(0,30)):''}</div>`;
-      }).join('')+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
+      }).join('')+defc+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
     html+='</tr>'; }
   html+='</tbody></table>'; return html;
 }
