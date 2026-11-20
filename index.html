@@ -76,6 +76,8 @@
   .estim-row{display:flex;gap:14px;flex-wrap:wrap;} .estim-row .mfield{flex:1;min-width:140px;}
   .estim-out{margin-top:14px;font-size:15px;}
   .estim-out .big{font-size:20px;font-weight:800;color:var(--bleu);}
+  .dash-assume{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;}
+  .dash-assume label{font-weight:600;color:var(--bleu);} .dash-assume input{width:80px;border:1px solid var(--bord);border-radius:6px;padding:5px 8px;text-align:right;}
   .level-wrap{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:14px 16px;margin-bottom:18px;}
   .level-h{font-weight:700;color:var(--bleu);font-size:13px;margin-bottom:10px;}
   table.level-tbl{width:100%;margin:0;} table.level-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;} table.level-tbl td{font-size:13px;}
@@ -146,6 +148,11 @@
   <div class="wrap wrap-full">
     <h2 class="page-h">Tableau de bord</h2>
     <p class="sub">Vue d'ensemble des chantiers, de la charge et de la capacité montage.</p>
+    <div class="dash-assume">
+      <label for="dashConges">Moyenne congés par technicien sur les 6 prochains mois (jours) :</label>
+      <input id="dashConges" type="number" min="0" step="0.5" value="0" onchange="saveConges()">
+      <span class="kpi-sub">Réduit la capacité prévisionnelle pour ajuster le délai estimé.</span>
+    </div>
     <div id="dashKpi" class="kpi-grid"></div>
     <div class="dash-estim">
       <h3 style="margin:0 0 4px;color:var(--bleu)">Estimation date de pose — annonce client (avant signature)</h3>
@@ -329,11 +336,13 @@
     <div class="mfield"><label>Priorité</label>
       <select id="chPrio"><option value="normale">Normale</option><option value="haute">Haute</option><option value="basse">Basse</option></select></div>
   </div>
-  <div class="mfield"><label>Description / travaux</label><textarea id="chDesc" rows="2"></textarea></div>
-  <div class="mfield"><label>Devis joint (PDF ou image)</label>
-    <button class="ghost small" onclick="document.getElementById('chDevisInput').click()">📎 Joindre un devis</button>
-    <input type="file" id="chDevisInput" accept="application/pdf,image/*" style="display:none" onchange="attachDevis(event)">
-    <span id="chDevisInfo" style="margin-left:10px;font-size:12px"></span>
+  <div class="mfield"><label>Note / description (visible par le technicien)</label><textarea id="chDesc" rows="2"></textarea></div>
+  <div class="mfield"><label>Lien internet (optionnel)</label><input id="chLien" type="url" placeholder="https://…"></div>
+  <div class="mfield"><label><input type="checkbox" id="chRepas" style="margin-right:7px;vertical-align:-1px">🍽 Repas à l'extérieur (affiche un symbole sur le planning du technicien)</label></div>
+  <div class="mfield"><label>Fichiers joints (devis, plans, photos — PDF ou images, plusieurs possibles)</label>
+    <button class="ghost small" onclick="document.getElementById('chFilesInput').click()">📎 Joindre des fichiers</button>
+    <input type="file" id="chFilesInput" accept="application/pdf,image/*" multiple style="display:none" onchange="attachFiles(event)">
+    <div id="chFilesInfo" style="margin-top:8px;font-size:12px;display:flex;flex-direction:column;gap:5px"></div>
   </div>
   <div class="modal-actions">
     <button class="rouge" id="chDelBtn" onclick="deleteChantier()" style="margin-right:auto;display:none">Supprimer</button>
@@ -385,6 +394,7 @@
 <div class="modal-bg" id="taskBg"><div class="modal">
   <h3>Modifier la tâche</h3>
   <div class="mfield"><label>Tâche</label><div id="taskName" style="font-weight:700"></div></div>
+  <button id="taskFicheBtn" class="ghost" style="display:none;margin-bottom:12px" onclick="editFicheFromTask()">✎ Modifier la fiche chantier</button>
   <div class="mrow">
     <div class="mfield"><label>Date de début</label><input id="taskDate" type="date"></div>
     <div class="mfield" style="flex:0 0 200px"><label>Durée (jours, hors week-end)</label><input id="taskDuree" type="number" min="1" step="1" value="1"></div>
@@ -395,6 +405,15 @@
     <button class="rouge" onclick="deleteTask()" style="margin-right:auto">Supprimer</button>
     <button onclick="closeTask()">Annuler</button>
     <button class="primary" onclick="saveTask()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- MODALE DÉTAIL CHANTIER (vue technicien) -->
+<div class="modal-bg" id="roBg"><div class="modal">
+  <h3 id="roTitle">Chantier</h3>
+  <div id="roBody" style="font-size:14px;line-height:1.55"></div>
+  <div class="modal-actions">
+    <button class="primary" onclick="document.getElementById('roBg').classList.remove('open')">Fermer</button>
   </div>
 </div></div>
 
@@ -442,8 +461,9 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.c
     params:{matSem:4, hSem:39, hJour:8, pass:'Chappert1188@&!81', pages:'https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'},
     logo:DEFAULT_LOGO }; }
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
-  d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8;
-  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO; }
+  d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
+  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
+  d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien=''; }); }
 function persist(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){ alert('Sauvegarde impossible (espace saturé).'); } }
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>(s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -552,14 +572,26 @@ function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; co
 function matAlertActive(ch){ if(ch.materiel==='oui'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
 function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||'#1b3a8c'; } return ch.couleur||'#1b3a8c'; }
 function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine'); }
+let chantierSort={key:'mois',dir:1};
+function setChantierSort(k){ if(chantierSort.key===k) chantierSort.dir*=-1; else chantierSort={key:k,dir:1}; renderChantiers(); }
+function chantierSortVal(c,k){ switch(k){
+  case 'ref': return refNum(c);
+  case 'client': return (c.client||'').toLowerCase();
+  case 'commercial': return (comName(c.commercialId)||'~~~').toLowerCase();
+  case 'mois': return chMonths(c)[0]||'9999-99';
+  case 'duree': return chHoursTotal(c);
+  case 'materiel': return matAlertActive(c)?0:(c.materiel==='oui'?2:1);
+  case 'statut': return {previsionnel:0,planifie:1,termine:2}[c.statut||'previsionnel'];
+  default: return 0; } }
+function thSort(lbl,key){ const a=chantierSort.key===key?(chantierSort.dir>0?' ▲':' ▼'):''; return `<th class="clic" title="Trier" onclick="setChantierSort('${key}')">${lbl}${a}</th>`; }
 function renderChantiers(){
   const q=(document.getElementById('searchChantier').value||'').toLowerCase();
   const list=db.chantiers.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q))
-    .sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
+    .sort((a,b)=>{ const va=chantierSortVal(a,chantierSort.key), vb=chantierSortVal(b,chantierSort.key); const r=va<vb?-1:(va>vb?1:(refNum(a)-refNum(b))); return r*chantierSort.dir; });
   const w=document.getElementById('chantierTableWrap');
   if(!list.length){ w.innerHTML='<div class="empty">Aucun chantier. Cliquez sur « ＋ Nouveau chantier ».</div>'; return; }
   const stL={previsionnel:'Prévisionnel',planifie:'Planifié',termine:'Terminé'};
-  w.innerHTML='<table class="grid"><thead><tr><th>Réf.</th><th>Client</th><th>Commercial</th><th>Mois prévu</th><th>Durée</th><th>Devis</th><th>Matériel</th><th>Statut</th><th></th></tr></thead><tbody>'+
+  w.innerHTML='<table class="grid"><thead><tr>'+thSort('Réf.','ref')+thSort('Client','client')+thSort('Commercial','commercial')+thSort('Mois prévu','mois')+thSort('Durée','duree')+'<th>Fichiers</th>'+thSort('Matériel','materiel')+thSort('Statut','statut')+'<th></th></tr></thead><tbody>'+
     list.map(c=>{ const alert=matAlertActive(c); const ms=chMonths(c);
       return `<tr>
       <td class="clic" onclick="openChantierModal('${c.id}')"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${esc(chantierColor(c))};margin-right:6px"></span>${esc(c.ref)}</td>
@@ -567,7 +599,7 @@ function renderChantiers(){
       <td>${esc(comName(c.commercialId)||'—')}</td>
       <td>${ms.length?ms.map(m=>esc(monthLabel(m))).join(', '):'<span style="color:var(--rouge)">à définir</span>'}</td>
       <td>${esc(chHoursTotal(c)+' h')}</td>
-      <td>${c.devisFile?`<a href="${c.devisFile.data}" download="${esc(c.devisFile.name)}" target="_blank" title="${esc(c.devisFile.name)}">📎 devis</a>`:'—'}</td>
+      <td>${(()=>{ const n=(c.files&&c.files.length)||(c.devisFile?1:0); return n?('📎 '+n+(c.repasExt?' · 🍽':'')):(c.repasExt?'🍽':'—'); })()}</td>
       <td>${c.materiel==='oui'?'✅ commandé':(alert?'<span class="alert-pill">⚠ à commander</span>':'—')}</td>
       <td><span class="st ${c.statut||'previsionnel'}">${stL[c.statut||'previsionnel']}</span></td>
       <td class="row-act"><button class="small" onclick="openChantierModal('${c.id}')">✎</button>
@@ -588,17 +620,19 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
   document.getElementById('chTechs').innerHTML = db.techniciens.length ? db.techniciens.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="chtk" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${esc(t.nom)}</label>`).join('') : '<span style="color:var(--muted);font-size:12px">Aucun technicien créé.</span>';
   document.getElementById('chCom').innerHTML='<option value="">—</option>'+db.commerciaux.map(x=>`<option value="${x.id}" ${c&&c.commercialId===x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
   v('chClient',c&&c.client||''); v('chSign',c&&c.dateSignature||''); v('chAdresse',c&&c.adresse||''); v('chTel',c&&c.tel||''); v('chNbTech',(c&&c.nbTechs)||1);
-  v('chDuree',c&&c.duree||1); v('chMat',c&&c.materiel||'non'); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||'');
-  chDevisTmp = c&&c.devisFile || null; renderDevisInfo();
+  v('chDuree',c&&c.duree||1); v('chMat',c&&c.materiel||'non'); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||''); v('chLien',c&&c.lien||'');
+  document.getElementById('chRepas').checked = !!(c&&c.repasExt);
+  chFilesTmp = (c&&c.files)? c.files.slice() : (c&&c.devisFile? [c.devisFile] : []); renderFilesInfo();
   chMoisTotal();
   document.getElementById('chDelBtn').style.display=c?'inline-flex':'none';
   document.getElementById('chantierBg').classList.add('open'); }
-let chDevisTmp=null;
-function renderDevisInfo(){ const el=document.getElementById('chDevisInfo');
-  el.innerHTML = chDevisTmp ? `<a href="${chDevisTmp.data}" download="${esc(chDevisTmp.name)}" target="_blank" style="color:var(--bleu)">${esc(chDevisTmp.name)}</a> <button class="small rouge" onclick="chDevisTmp=null;renderDevisInfo()">×</button>` : '<span style="color:var(--muted)">Aucun</span>'; }
-function attachDevis(e){ const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(f.size>8*1024*1024){ if(!confirm('Ce fichier est volumineux ('+Math.round(f.size/1024/1024)+' Mo) et peut saturer le stockage. Continuer ?')) return; }
-  const r=new FileReader(); r.onload=ev=>{ chDevisTmp={name:f.name, data:ev.target.result}; renderDevisInfo(); }; r.readAsDataURL(f); }
+let chFilesTmp=[];
+function renderFilesInfo(){ const el=document.getElementById('chFilesInfo');
+  el.innerHTML = chFilesTmp.length ? chFilesTmp.map((f,i)=>`<span><a href="${f.data}" download="${esc(f.name)}" target="_blank" style="color:var(--bleu)">${esc(f.name)}</a> <button class="small rouge" onclick="removeFile(${i})">×</button></span>`).join('') : '<span style="color:var(--muted)">Aucun fichier</span>'; }
+function removeFile(i){ chFilesTmp.splice(i,1); renderFilesInfo(); }
+function attachFiles(e){ const fs=[...e.target.files]; if(!fs.length) return; e.target.value='';
+  fs.forEach(f=>{ if(f.size>8*1024*1024){ if(!confirm('« '+f.name+' » est volumineux ('+Math.round(f.size/1024/1024)+' Mo) et peut saturer le stockage. L\'ajouter quand même ?')) return; }
+    const r=new FileReader(); r.onload=ev=>{ chFilesTmp.push({name:f.name, data:ev.target.result}); renderFilesInfo(); }; r.readAsDataURL(f); }); }
 function closeChantier(){ document.getElementById('chantierBg').classList.remove('open'); }
 function chMoisToggle(cb){ const inp=cb.closest('.cfg-month-row').querySelector('.chmh'); inp.disabled=!cb.checked; if(cb.checked&&!inp.value) inp.focus(); chMoisTotal(); }
 function chMoisTotal(){ let t=0; document.querySelectorAll('#chMoisH .cfg-month-row').forEach(r=>{ if(r.querySelector('.chmk').checked) t+=parseFloat(r.querySelector('.chmh').value)||0; }); document.getElementById('chMoisHTotal').textContent='Total : '+t+' h';
@@ -608,7 +642,8 @@ function saveChantier(){
   const moisHeures={}; document.querySelectorAll('#chMoisH .cfg-month-row').forEach(r=>{ const cb=r.querySelector('.chmk'); if(cb.checked){ moisHeures[cb.value]=parseFloat(r.querySelector('.chmh').value)||0; } });
   const c={ id:editChId||uid(), ref:'', client:val('chClient').trim(), commercialId:val('chCom'), dateSignature:val('chSign'),
     adresse:val('chAdresse').trim(), tel:val('chTel').trim(), nbTechs:Math.max(1,parseInt(val('chNbTech'))||1), moisHeures, heures:Object.values(moisHeures).reduce((s,h)=>s+h,0),
-    techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), materiel:val('chMat'), prio:val('chPrio'), desc:val('chDesc').trim(), devisFile:chDevisTmp };
+    techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), materiel:val('chMat'), prio:val('chPrio'), desc:val('chDesc').trim(),
+    lien:val('chLien').trim(), repasExt:document.getElementById('chRepas').checked, files:chFilesTmp.slice(), devisFile:chFilesTmp[0]||null };
   if(!c.client){ alert('Indiquez le client / chantier.'); return; }
   if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
   else { c.ref=nextRef(); c.statut='previsionnel'; db.chantiers.push(c); }
@@ -635,7 +670,19 @@ function absenceDaysMonth(techId,y,m0){ const hol=frenchHolidays(y); let n=0; db
 function dispoMontageHours(mk){ const p=(mk||'').split('-'); const y=+p[0],m0=+p[1]-1; if(!y||m0<0) return 0; const wd=workingDaysInMonth(y,m0); const perDay=perDayHours(); let tot=0; roleMonteurs().forEach(t=>tot+=(wd-absenceDaysMonth(t.id,y,m0))*perDay); return Math.round(tot); }
 /* heures déjà posées fermement (chantiers sur le planning) dans le mois */
 function committedMonthHours(mk){ const pp=(mk||'').split('-'); const y=+pp[0],m=+pp[1]; const ids=new Set(roleMonteurs().map(t=>t.id)); let tot=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&ids.has(p.techId)&&p.date){ const q=p.date.split('-'); if(+q[0]===y&&+q[1]===m) tot+=perDayHours(); } }); return Math.round(tot); }
-function netDispoMonth(mk){ return Math.max(0, dispoMontageHours(mk)-committedMonthHours(mk)); }
+/* Hypothèse congés : moyenne de jours de congé par technicien montage sur les 6 prochains mois,
+   répartie au prorata des jours ouvrés pour réduire la capacité prévisionnelle. */
+function todayMid(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+function horizon6End(){ const d=todayMid(); d.setMonth(d.getMonth()+6); return d; }
+function workingDaysBetween(a,b){ let n=0; const d=new Date(a); while(d<=b){ const w=d.getDay(); if(w>=1&&w<=5&&!frenchHolidays(d.getFullYear()).has(ymd(d))) n++; d.setDate(d.getDate()+1); } return n; }
+let _congesCache=null;
+function congesReductionPerDay(){ const cm=db.params.congesMoy6||0; const nM=roleMonteurs().length; const key=cm+'|'+nM+'|'+ymd(todayMid());
+  if(_congesCache&&_congesCache.key===key) return _congesCache.val;
+  let v=0; if(cm>0&&nM>0){ const wd=workingDaysBetween(todayMid(),horizon6End()); if(wd>0) v=(cm*nM*perDayHours())/wd; }
+  _congesCache={key,val:v}; return v; }
+function congesTotalHours(){ return Math.round((db.params.congesMoy6||0)*roleMonteurs().length*perDayHours()); }
+function congesReductionMonth(mk){ const r=congesReductionPerDay(); if(r<=0) return 0; const pp=(mk||'').split('-'); const y=+pp[0],m0=+pp[1]-1; const start=todayMid(),end=horizon6End(); const hol=frenchHolidays(y); let n=0; const d=new Date(y,m0,1); while(d.getMonth()===m0){ const w=d.getDay(); if(w>=1&&w<=5&&!hol.has(ymd(d))&&d>=start&&d<=end) n++; d.setDate(d.getDate()+1); } return Math.round(n*r); }
+function netDispoMonth(mk){ return Math.max(0, dispoMontageHours(mk)-committedMonthHours(mk)-congesReductionMonth(mk)); }
 /* séquence de mois : du 1er mois vendu jusqu'à l'horizon (pour accueillir les reports) */
 function prevMonthsSeq(){
   const set=new Set(); db.chantiers.forEach(c=>{ if(!isPlaced(c)&&c.statut!=='termine') chMonths(c).forEach(m=>set.add(m)); });
@@ -661,7 +708,7 @@ function perDayHours(){ return db.params.hJour||8; }
 function isWorkDay(d){ const w=d.getDay(); if(w<1||w>5) return false; return !frenchHolidays(d.getFullYear()).has(ymd(d)); }
 function montageAvailOnDay(dstr){ let n=0; roleMonteurs().forEach(t=>{ const off=db.poses.some(p=>p.techId===t.id&&p.date===dstr&&(p.type==='conge'||p.type==='maladie'||p.type==='cours')); if(!off) n++; }); return n; }
 function committedChantierHoursOnDay(dstr){ const ids=new Set(roleMonteurs().map(t=>t.id)); let n=0; db.poses.forEach(p=>{ if(p.type==='chantier'&&p.date===dstr&&ids.has(p.techId)) n++; }); return n*perDayHours(); }
-function freeCapacityOnDay(d){ if(!isWorkDay(d)) return 0; const dstr=ymd(d); return Math.max(0, montageAvailOnDay(dstr)*perDayHours() - committedChantierHoursOnDay(dstr)); }
+function freeCapacityOnDay(d){ if(!isWorkDay(d)) return 0; const dstr=ymd(d); let cap=montageAvailOnDay(dstr)*perDayHours() - committedChantierHoursOnDay(dstr); if(d>=todayMid()&&d<=horizon6End()) cap-=congesReductionPerDay(); return Math.max(0, cap); }
 function isPlaced(c){ return db.poses.some(p=>p.chantierId===c.id); }
 function chSigDate(c){ if(c.dateSignature) return new Date(c.dateSignature+'T00:00:00'); const ms=chMonths(c); if(ms.length) return new Date(ms[0]+'-01T00:00:00'); return new Date(new Date().getFullYear(),0,1); }
 let lastPropo=null;
@@ -706,6 +753,7 @@ function estimatePose(hours, nbTechs, sigStr){
   return {start:fd, end:ld, days:nd, earliest:start, ok:hl<=0.01};
 }
 function renderDash(){
+  v('dashConges', db.params.congesMoy6||0);
   const active=db.chantiers.filter(c=>c.statut!=='termine');
   const placed=active.filter(isPlaced), toPlan=active.filter(c=>!isPlaced(c));
   const hVendu=Math.round(active.reduce((s,c)=>s+chHoursTotal(c),0));
@@ -715,18 +763,21 @@ function renderDash(){
   const nMont=roleMonteurs().length;
   const over=hToPlan>hDispo;
   const horizonLbl=capFirst(monthLabel(ymd(horizonEnd()).slice(0,7)));
+  const congesH=congesTotalHours();
   const cards=[
     {num:active.length, lbl:'Chantiers actifs', sub:(db.chantiers.length-active.length)+' terminé(s)'},
     {num:placed.length, lbl:'Chantiers planifiés', sub:hPlan+' h posées'},
     {num:toPlan.length, lbl:'Restant à planifier', sub:hToPlan+' h', cls:toPlan.length?'':'kpi-ok'},
     {num:hVendu+' h', lbl:'Heures vendues', sub:nMont+' monteur(s)'},
-    {num:hDispo+' h', lbl:'Capacité dispo', sub:'jusqu\'à '+horizonLbl},
+    {num:(db.params.congesMoy6||0)+' j', lbl:'Congés moy./tech (6 mois)', sub:'−'+congesH+' h capacité'},
+    {num:hDispo+' h', lbl:'Capacité dispo', sub:'congés déduits · jusqu\'à '+horizonLbl},
     {num:(hDispo-hToPlan)+' h', lbl:'Marge capacité', sub:over?'⚠ surcharge':'capacité suffisante', cls:over?'kpi-warn':'kpi-ok'}
   ];
   document.getElementById('dashKpi').innerHTML=cards.map(c=>`<div class="kpi ${c.cls||''}"><div class="kpi-num">${c.num}</div><div class="kpi-lbl">${c.lbl}</div><div class="kpi-sub">${c.sub}</div></div>`).join('');
   if(!val('esD')) v('esD', ymd(new Date()));
   runEstim();
 }
+function saveConges(){ db.params.congesMoy6=Math.max(0,parseFloat(val('dashConges'))||0); _congesCache=null; persist(); renderDash(); }
 function runEstim(){
   const out=document.getElementById('estimOut'); if(!out) return;
   const h=parseFloat(val('esH'))||0, nb=Math.max(1,parseInt(val('esT'))||1), ds=val('esD');
@@ -848,8 +899,9 @@ function buildGrid(ro){
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':textOn(col);
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
+        const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
-        return `<div class="plan-chip${dim?' dimmed':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}</div>`;
+        return `<div class="plan-chip${dim?' dimmed':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}${repas?' 🍽':''}</b>${sub?esc(sub.slice(0,30)):''}</div>`;
       }).join('')+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
     html+='</tr>'; }
   html+='</tbody></table>'; return html;
@@ -915,7 +967,9 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
   v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
   document.getElementById('taskTech').innerHTML=db.techniciens.map(t=>`<option value="${t.id}" ${t.id===p.techId?'selected':''}>${esc(t.nom)}</option>`).join('');
+  const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
   document.getElementById('taskBg').classList.add('open'); }
+function editFicheFromTask(){ const id=taskCtx&&taskCtx.chantierId; if(!id) return; closeTask(); openChantierModal(id); }
 function closeTask(){ document.getElementById('taskBg').classList.remove('open'); }
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
   if(!start||!techId){ alert('Date et technicien requis.'); return; }
@@ -934,7 +988,27 @@ function deleteTask(){ const ctx=taskCtx; if(!ctx) return; if(!confirm('Supprime
   db.poses=db.poses.filter(p=>!blockFilter(ctx)(p));
   if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); const others=db.poses.some(p=>p.chantierId===ctx.chantierId); if(ch&&!others&&ch.statut==='planifie') ch.statut='previsionnel'; }
   persist(); closeTask(); renderPlanning(); }
-function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return; if(p.type==='chantier'){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch) alert('Chantier : '+ch.client+'\n'+(ch.adresse||'')+'\n'+(ch.tel?'Tél : '+ch.tel:'')); } }
+function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
+  if(p.type!=='chantier'){ const lbl=(POSE_STATUS[p.type]||{}).label||p.type; alert(lbl+(p.note?' : '+p.note:'')); return; }
+  const ch=p.chantierId?db.chantiers.find(c=>c.id===p.chantierId):null;
+  document.getElementById('roTitle').textContent='Chantier — '+(ch?ch.client:(p.label||'Chantier'));
+  let h='';
+  if(ch){
+    if(ch.adresse) h+='<div>📍 '+esc(ch.adresse)+'</div>';
+    if(ch.tel) h+='<div>📞 <a href="tel:'+esc(ch.tel)+'">'+esc(ch.tel)+'</a></div>';
+    if(ch.repasExt) h+='<div style="margin-top:6px;font-weight:700;color:#0891b2">🍽 Repas à l\'extérieur</div>';
+    if(ch.desc) h+='<div style="margin-top:10px;white-space:pre-wrap"><b>Note :</b><br>'+esc(ch.desc)+'</div>';
+    if(ch.lien) h+='<div style="margin-top:10px">🔗 <a href="'+esc(ch.lien)+'" target="_blank" rel="noopener" style="color:var(--bleu)">'+esc(ch.lien)+'</a></div>';
+    const files=(ch.files&&ch.files.length)?ch.files:(ch.devisFile?[ch.devisFile]:[]);
+    if(files.length){ h+='<div style="margin-top:10px"><b>Fichiers :</b><div style="display:flex;flex-direction:column;gap:5px;margin-top:5px">'+
+      files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" target="_blank" style="color:var(--bleu)">📎 ${esc(f.name)}</a>`).join('')+'</div></div>'; }
+  } else {
+    h+='<div>'+esc(p.label||'Chantier')+'</div>';
+  }
+  if(p.note) h+='<div style="margin-top:10px"><b>Note du jour :</b> '+esc(p.note)+'</div>';
+  document.getElementById('roBody').innerHTML=h||'<span style="color:var(--muted)">Aucun détail.</span>';
+  document.getElementById('roBg').classList.add('open');
+}
 
 /* ===== Événement (absence / astreinte manuelle) ===== */
 let editEvId=null;
@@ -1071,7 +1145,7 @@ function importMerge(e){ const f=e.target.files[0]; if(!f) return; const r=new F
       const dup=db.chantiers.some(x=>{ const xm=(x.moisHeures?Object.keys(x.moisHeures).sort():(x.mois?[x.mois]:[])); return norm(x.client)===norm(c.client)&&(xm[0]||'')===(ms[0]||''); });
       if(!dup){ db.seq=(db.seq||0)+1; db.chantiers.push({ id:uid(), ref:c.ref||('CH-'+(ms[0]||'').slice(0,4)+'-'+String(db.seq).padStart(3,'0')), client:c.client,
         commercialId:c.commercialId?(comMap[c.commercialId]||''):'', adresse:c.adresse||'', tel:c.tel||'', moisHeures:c.moisHeures||(c.mois?{[c.mois]:c.heures||0}:{}),
-        heures:c.heures||0, techIds:(c.techIds||[]).map(id=>techMap[id]||id).filter(Boolean), materiel:c.materiel||'non', prio:c.prio||'normale', desc:c.desc||'', statut:c.statut||'previsionnel', devisFile:c.devisFile||null }); addC++; } });
+        heures:c.heures||0, nbTechs:c.nbTechs||1, dateSignature:c.dateSignature||'', techIds:(c.techIds||[]).map(id=>techMap[id]||id).filter(Boolean), materiel:c.materiel||'non', prio:c.prio||'normale', desc:c.desc||'', lien:c.lien||'', repasExt:!!c.repasExt, files:c.files||(c.devisFile?[c.devisFile]:[]), devisFile:c.devisFile||(c.files&&c.files[0])||null, statut:c.statut||'previsionnel' }); addC++; } });
     persist(); updateBadges(); showView('chantiers');
     alert('Fusion terminée : '+addC+' chantier(s) ajouté(s), '+addP+' tâche(s) de planning ajoutée(s). Techniciens conservés.');
   }; r.readAsText(f,'UTF-8');
