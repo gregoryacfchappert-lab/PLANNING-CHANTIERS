@@ -972,6 +972,10 @@ function renderPrev(){
 let weekStart=mondayOf(new Date());
 function weekShift(n){ weekStart.setDate(weekStart.getDate()+n*7); refreshPlanning(); }
 function weekToday(){ weekStart=mondayOf(new Date()); refreshPlanning(); }
+/* Changer de semaine à la molette (gestion + vue technicien) */
+let _wheelLast=0;
+function wheelWeek(e){ if(Math.abs(e.deltaY)<2) return; e.preventDefault(); const now=Date.now(); if(now-_wheelLast<220) return; _wheelLast=now; weekShift(e.deltaY>0?1:-1); }
+function setupWheel(){ ['planGridWrap','planTechWrap'].forEach(id=>{ const el=document.getElementById(id); if(el&&!el._wheelBound){ el.addEventListener('wheel', wheelWeek, {passive:false}); el._wheelBound=true; } }); }
 function refreshPlanning(){ if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); else renderPlanning(); }
 function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
 function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
@@ -1279,6 +1283,7 @@ function v(id,x){ const e=document.getElementById(id); if(e) e.value=x; }
 /* ===== Init ===== */
 updateBadges();
 showView('plantech');
+setupWheel();
 cloudInit();
 </script>
 </body>
