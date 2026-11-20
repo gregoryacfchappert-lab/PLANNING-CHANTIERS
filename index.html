@@ -889,8 +889,8 @@ function renderDash(){
   const active=db.chantiers.filter(c=>c.statut!=='termine');
   const placed=active.filter(isPlaced), toPlan=active.filter(c=>!isPlaced(c));
   const hVendu=Math.round(active.reduce((s,c)=>s+chHoursTotal(c),0));
-  const hPlan=Math.round(placed.reduce((s,c)=>s+chHoursTotal(c),0));
-  const hToPlan=Math.round(toPlan.reduce((s,c)=>s+chHoursTotal(c),0));
+  const hPlan=Math.round(db.poses.filter(p=>p.type==='chantier').length*perDayHours()); // heures réellement posées sur le planning
+  const hToPlan=Math.max(0, hVendu-hPlan); // reste à poser
   const hDispo=Math.round(freeCapacityHorizon());
   const nMont=roleMonteurs().length;
   const over=hToPlan>hDispo;
