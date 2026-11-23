@@ -827,6 +827,8 @@ function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; co
 function matAlertActive(ch){ if((ch.matEtat||'non')!=='non'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
 function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||chDefaultColor(); } return ch.couleur||chDefaultColor(); }
 function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine' && !c.horsListe); }
+function matRank(c){ return (c.matEtat==='recu')?0:((c.matEtat==='cmd')?1:2); }
+function matTag(c){ return (c.matEtat==='recu')?' · <b style="color:#1a7f3c">✅ reçu</b>':((c.matEtat==='cmd')?' · <span style="color:#1d4ed8">📦 commandé</span>':(matAlertActive(c)?' · ⚠ matériel':'')); }
 let chantierSort={key:'recep',dir:1};
 let chMatFilter='all';
 function setMatFilter(f){ chMatFilter=f; renderChantiers(); }
@@ -1255,12 +1257,12 @@ function renderMon(){
 }
 function renderBanner(){
   const box=document.getElementById('chantierBanner'); const si=document.getElementById('searchPlanChantier'); const q=(si&&si.value||'').toLowerCase();
-  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=> matRank(a)-matRank(b) || (a.mois||'').localeCompare(b.mois||''));
   if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">'+(q?'Aucun chantier trouvé.':'Aucun chantier à planifier.')+'</div>'; return; }
   box.innerHTML=list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id);
     return `<div class="ch-card" draggable="true" style="border-left-color:${esc(chantierColor(c))}" ondragstart="chDragStart(event,'${c.id}')" ondragend="chDragEnd(event)">
       <div class="cc-nom">${esc(c.client)} ${placed?'<span style="color:var(--vert)">✓</span>':''}</div>
-      <div class="cc-meta">${esc(c.ref)} · ${chHoursTotal(c)} h · ${chMonths(c).length?chMonths(c).map(m=>esc(monthLabel(m))).join(', '):'mois ?'}${matAlertActive(c)?' · ⚠ matériel':''}</div>
+      <div class="cc-meta">${esc(c.ref)} · ${chHoursTotal(c)} h · ${chMonths(c).length?chMonths(c).map(m=>esc(monthLabel(m))).join(', '):'mois ?'}${matTag(c)}</div>
       ${(c.techIds&&c.techIds.length)?`<div class="cc-meta" style="color:var(--bleu)">👷 ${c.techIds.map(id=>esc(techName(id))).filter(Boolean).join(', ')}</div>`:''}
       <div class="cc-act">${placed?`<button class="small" onclick="finishChantier('${c.id}')">✓ Terminé</button><button class="small" onclick="unplaceChantier('${c.id}')">Retirer du planning</button>`:`<button class="small" onclick="openChantierModal('${c.id}')">✎</button>`}</div>
     </div>`; }).join('');
@@ -1282,9 +1284,9 @@ function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDef
 function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
 function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover');
   if(dragPoseId){ movePose(dragPoseId,ds,techId); return; }
-  if(dragChId){ const id=dragChId; placeChantier(id,ds,techId); openSortirDialog(id); return; }
+  if(dragChId){ const id=dragChId; placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); return; }
   if(dragType){ placeType(dragType,ds,techId); return; }
-  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')) movePose(data.slice(5),ds,techId); else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); openSortirDialog(id); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')) movePose(data.slice(5),ds,techId); else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
 let sortirChId=null;
 function openSortirDialog(chId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch||ch.horsListe) return; sortirChId=chId; document.getElementById('sortirMsg').textContent='« '+ch.client+' » est planifié. Le sortir de la liste des chantiers à planifier ?'; document.getElementById('sortirBg').classList.add('open'); }
 function sortirOui(){ const ch=db.chantiers.find(c=>c.id===sortirChId); if(ch){ ch.horsListe=true; persist(); } document.getElementById('sortirBg').classList.remove('open'); renderPlanning(); toast('Chantier sorti de la liste','ok'); }
@@ -1323,10 +1325,10 @@ function closeCellPick(){ document.getElementById('cellPickBg').classList.remove
 function cellCheckedTechs(){ const ids=[...document.querySelectorAll('#cellTechs .ctk:checked')].map(c=>c.value); return ids.length?ids:(cellCtx?[cellCtx.techId]:[]); }
 function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); toast('Chantier libre créé','ok'); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
-  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.client||'').localeCompare(b.client||'')).slice(0,80);
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=> matRank(a)-matRank(b) || (a.client||'').localeCompare(b.client||'')).slice(0,80);
   const box=document.getElementById('cellPickList');
-  box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
-function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:'chantier',chantierId:id,techId:tid,date:cellCtx.ds,note:''}); }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); }
+  box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${matTag(c)}${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
+function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:'chantier',chantierId:id,techId:tid,date:cellCtx.ds,note:''}); }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); setTimeout(()=>openSortirDialog(id),60); }
 function cellPickType(k){ if(!cellCtx) return; const gid=uid(); cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.type===k&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:k,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); }
 function cellPickEvent(){ if(!cellCtx) return; const c=cellCtx; closeCellPick(); openEvent(null,c.ds,c.techId); }
 function finishChantier(id){ const ch=db.chantiers.find(c=>c.id===id); if(ch) ch.statut='termine'; persist(); renderPlanning(); updateBadges(); }
