@@ -480,6 +480,20 @@
   </div>
 </div></div>
 
+<!-- DIALOGUE : sortir le chantier de la liste -->
+<div class="modal-bg" id="sortirBg"><div class="modal" style="max-width:420px">
+  <h3>Chantier planifié</h3>
+  <div id="sortirMsg" style="margin-bottom:6px;font-size:15px">Sortir ce chantier de la liste des chantiers à planifier ?</div>
+  <div class="modal-actions"><button onclick="sortirNon()">Non</button><button class="primary" onclick="sortirOui()">Oui</button></div>
+</div></div>
+
+<!-- DIALOGUE : remettre le chantier dans la liste -->
+<div class="modal-bg" id="remettreBg"><div class="modal" style="max-width:420px">
+  <h3>Chantier retiré du planning</h3>
+  <div id="remettreMsg" style="margin-bottom:6px;font-size:15px">Remettre ce chantier dans la liste des chantiers à planifier ?</div>
+  <div class="modal-actions"><button onclick="remettreNon()">Non</button><button class="primary" onclick="remettreOui()">Oui</button></div>
+</div></div>
+
 <!-- MODALE SÉLECTEUR DE CASE (ajout chantier par recherche, ou type) -->
 <div class="modal-bg" id="cellPickBg"><div class="modal">
   <h3 id="cellPickTitle">Ajouter au planning</h3>
@@ -620,27 +634,29 @@ function coerceList(v){ if(v==null) return []; return Array.isArray(v)? v.filter
 function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; return d; }
 function clean(x){ return JSON.parse(JSON.stringify(x===undefined?null:x)); }
 function schedulePush(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(pushDiff, 600); }
-function pushDiff(){ if(!cloudOn||!fbDb) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
+function pushDiff(){ if(!cloudOn||!fbDb||techLinkMode) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
 function pushAll(){ if(!fbDb) return; const all={}; CLOUD_KEYS.forEach(k=>{ all[k]=clean(db[k]); _shadow[k]=JSON.stringify(db[k]); }); fbDb.ref('db').set(all).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('err')); }
 function setSyncStatus(s){ const el=document.getElementById('syncDot'); if(!el) return; el.className='sync-dot '+(s||''); el.title = s==='ok'?'Synchronisé':(s==='err'?'Erreur de synchro':'Hors ligne (local)'); }
 let currentView='plantech';
+const _urlTech=(new URLSearchParams(location.search)).get('tech');
+const techLinkMode=!!_urlTech;
 function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
   fbAuth=firebase.auth(); fbDb=firebase.database();
-  fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
+  fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else if(techLinkMode){ document.getElementById('loginBg').style.display='none'; fbAuth.signInAnonymously().catch(e=>{ document.getElementById('monBody').innerHTML='<div class="empty" style="margin-top:30px">Accès indisponible. Contactez votre responsable.<br><span style="font-size:12px">('+esc(e.code||e.message||'')+')</span></div>'; showView('mon'); }); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
 }
 function onSignedIn(u){
   document.getElementById('loginBg').style.display='none';
-  const ub=document.getElementById('userBadge'); ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté';
+  const ub=document.getElementById('userBadge'); if(techLinkMode){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté'; }
   fbDb.ref('db').once('value').then(snap=>{
     const v=snap.val();
     const cloudHas=v&&((v.chantiers&&coerceList(v.chantiers).length)||(v.techniciens&&coerceList(v.techniciens).length));
     const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
     if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
     else { migr(db); pushAll(); }
-    cloudOn=true; persistLocal(); setSyncStatus('ok'); rerender();
+    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(techLinkMode) showView('mon'); else rerender();
     CLOUD_KEYS.forEach(k=>{
       fbDb.ref('db/'+k).on('value', s=>{
         const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
@@ -686,6 +702,7 @@ function chDefaultColor(){ return (db.params&&db.params.chColorDefault)||'#1b3a8
 /* ===== Navigation ===== */
 let adminUnlocked=false;
 function showView(v){
+  if(techLinkMode) v='mon';
   currentView=v;
   ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
   document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
@@ -721,8 +738,10 @@ function renderTech(){
       <td class="clic" onclick="openTechModal('${t.id}')"><b>${esc(t.nom)}</b></td>
       <td>${ROLE_LBL[t.role||'bureau']||'—'}${(t.role||'')==='montage'?' 🔧':''}</td>
       <td>${t.astreinte?'✅':'—'}</td><td>${esc(t.tel||'')}</td>
-      <td class="row-act"><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`; }).join('')+'</tbody></table>';
+      <td class="row-act"><button class="small" title="Lien personnel (à envoyer au technicien)" onclick="copyTechLink('${t.id}')">🔗 Lien</button><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`; }).join('')+'</tbody></table>';
 }
+function techLinkUrl(id){ let base=location.origin+location.pathname; if(location.protocol==='file:'||!/github\.io/.test(location.host)) base='https://gregoryacfchappert-lab.github.io/PLANNING-CHANTIERS/'; return base+'?tech='+id; }
+function copyTechLink(id){ const url=techLinkUrl(id); if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(()=>toast('Lien copié ✔','ok')).catch(()=>prompt('Copiez le lien :',url)); } else { prompt('Copiez le lien :',url); } }
 function moveTech(id,dir){ const i=db.techniciens.findIndex(t=>t.id===id); const j=i+dir; if(i<0||j<0||j>=db.techniciens.length) return; const a=db.techniciens; const tmp=a[i]; a[i]=a[j]; a[j]=tmp; persist(); renderTech(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); }
 let editTechId=null;
 function openTechModal(id){ editTechId=id||null; const t=id?db.techniciens.find(x=>x.id===id):null;
@@ -794,8 +813,8 @@ function configMonths(){ const out=[]; const y0=new Date().getFullYear(); for(le
 function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; const p=ms[0].split('-'); const d=new Date(+p[0], +p[1]-1, 1); d.setDate(d.getDate()-(db.params.matSem||4)*7); return d; }
 function matAlertActive(ch){ if(ch.materiel==='oui'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
 function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||chDefaultColor(); } return ch.couleur||chDefaultColor(); }
-function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine'); }
-let chantierSort={key:'mois',dir:1};
+function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine' && !c.horsListe); }
+let chantierSort={key:'recep',dir:1};
 function setChantierSort(k){ if(chantierSort.key===k) chantierSort.dir*=-1; else chantierSort={key:k,dir:1}; renderChantiers(); }
 function chantierSortVal(c,k){ switch(k){
   case 'ref': return refNum(c);
@@ -804,8 +823,10 @@ function chantierSortVal(c,k){ switch(k){
   case 'mois': return chMonths(c)[0]||'9999-99';
   case 'duree': return chHoursTotal(c);
   case 'materiel': return matAlertActive(c)?0:(c.materiel==='oui'?2:1);
+  case 'recep': return c.matRecu? c.matRecu : '9999-99-99';
   case 'statut': return {previsionnel:0,planifie:1,termine:2}[c.statut||'previsionnel'];
   default: return 0; } }
+function setMatRecu(id,date){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.matRecu=date||''; persist(); renderChantiers(); }
 function thSort(lbl,key){ const a=chantierSort.key===key?(chantierSort.dir>0?' ▲':' ▼'):''; return `<th class="clic" title="Trier" onclick="setChantierSort('${key}')">${lbl}${a}</th>`; }
 function renderChantiers(){
   const q=(document.getElementById('searchChantier').value||'').toLowerCase();
@@ -813,8 +834,8 @@ function renderChantiers(){
     .sort((a,b)=>{ const va=chantierSortVal(a,chantierSort.key), vb=chantierSortVal(b,chantierSort.key); const r=va<vb?-1:(va>vb?1:(refNum(a)-refNum(b))); return r*chantierSort.dir; });
   const w=document.getElementById('chantierTableWrap');
   if(!list.length){ w.innerHTML='<div class="empty">Aucun chantier. Cliquez sur « ＋ Nouveau chantier ».</div>'; return; }
-  const stL={previsionnel:'Prévisionnel',planifie:'Planifié',termine:'Terminé'};
-  w.innerHTML='<table class="grid"><thead><tr>'+thSort('Réf.','ref')+thSort('Client','client')+thSort('Commercial','commercial')+thSort('Mois prévu','mois')+thSort('Durée','duree')+'<th>Fichiers</th>'+thSort('Matériel','materiel')+thSort('Statut','statut')+'<th></th></tr></thead><tbody>'+
+  const todayStr=ymd(new Date());
+  w.innerHTML='<table class="grid"><thead><tr>'+thSort('Réf.','ref')+thSort('Client','client')+thSort('Commercial','commercial')+thSort('Mois prévu','mois')+thSort('Durée','duree')+'<th>Fichiers</th>'+thSort('Cmd.','materiel')+thSort('Réception matériel','recep')+'<th></th></tr></thead><tbody>'+
     list.map(c=>{ const alert=matAlertActive(c); const ms=chMonths(c);
       return `<tr>
       <td class="clic" onclick="openChantierModal('${c.id}')"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${esc(chantierColor(c))};margin-right:6px"></span>${esc(c.ref)}</td>
@@ -823,8 +844,8 @@ function renderChantiers(){
       <td>${ms.length?ms.map(m=>esc(monthLabel(m))).join(', '):'<span style="color:var(--rouge)">à définir</span>'}</td>
       <td>${esc(chHoursTotal(c)+' h')}</td>
       <td>${(()=>{ const n=(c.files&&c.files.length)||(c.devisFile?1:0); return n?('📎 '+n+(c.repasExt?' · 🍽':'')):(c.repasExt?'🍽':'—'); })()}</td>
-      <td>${c.materiel==='oui'?'✅ commandé':(alert?'<span class="alert-pill">⚠ à commander</span>':'—')}</td>
-      <td><span class="st ${c.statut||'previsionnel'}">${stL[c.statut||'previsionnel']}</span></td>
+      <td>${c.materiel==='oui'?'✅':(alert?'<span class="alert-pill">⚠</span>':'—')}</td>
+      <td style="white-space:nowrap"><input type="date" value="${c.matRecu||''}" onchange="setMatRecu('${c.id}',this.value)" title="Date de réception matériel (AR)" style="padding:4px 6px;border:1px solid ${c.matRecu?'#1a9d5a':'var(--bord)'};border-radius:6px;font-size:12px;${c.matRecu?'background:#eafaef':''}">${c.matRecu?'<span style="color:#1a7f3c;font-weight:700;margin-left:5px">✓ reçu</span>':`<button class="small" style="margin-left:5px" onclick="setMatRecu('${c.id}','${todayStr}')">📦 Reçu</button>`}</td>
       <td class="row-act"><button class="small" onclick="openChantierModal('${c.id}')">✎</button>
         ${c.materiel!=='oui'?`<button class="small" title="Marquer matériel commandé" onclick="markMat('${c.id}')">📦 Commandé</button>`:''}
         <button class="small rouge" onclick="delChantierRow('${c.id}')">🗑</button></td></tr>`;
@@ -1132,12 +1153,13 @@ function buildWeekTable(wkStart, ro){
       if(ferie){ return '<td class="plan-cell plan-ferie"><div class="plan-chip" style="background:#cbd5e1;color:#334155;pointer-events:none"><b>Férié</b></div>'+ps.map(p=>{ const col=poseColor(p); const tc=(p.type==='chantier'?'#111':textOn(col)); const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`; return `<div class="plan-chip" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(poseLabel(p))}</b></div>`; }).join('')+'</td>'; }
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
-      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5){ const sc=statusColor(role); defc=`<div class="plan-chip plan-default" style="background:${sc};color:${textOn(sc)}"><b>${POSE_STATUS[role].label}</b></div>`; } }
+      if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5){ const sc=statusColor(role); defc=`<div class="plan-chip" style="background:${sc};color:${textOn(sc)};pointer-events:none"><b>${POSE_STATUS[role].label}</b></div>`; } }
       const inner=ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
-        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
+        const drag=(ro||p.type==='astreinte')?'':` draggable="true" ondragstart="event.stopPropagation();poseDragStart(event,'${p.id}')" ondragend="chDragEnd(event)"`;
+        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
       }).join('')+defc;
       return ro ? `<td class="plan-cell plan-cell-ro"><div class="cell-fill">${inner}</div></td>` : `<td class="plan-cell" ${cellAttr}>${inner}<span class="addp">＋</span></td>`; }).join('');
     html+='</tr>'; }
@@ -1164,18 +1186,25 @@ function monToday(){ monWeekStart=mondayOf(new Date()); renderMon(); }
 function monPickTech(){ const id=document.getElementById('monTechSel').value; try{ localStorage.setItem('acf_montech', id); }catch(e){} renderMon(); }
 function renderMon(){
   const sel=document.getElementById('monTechSel');
-  let myId=''; try{ myId=localStorage.getItem('acf_montech')||''; }catch(e){}
+  let myId='';
+  if(techLinkMode){ myId=_urlTech; } else { try{ myId=localStorage.getItem('acf_montech')||''; }catch(e){} }
   if(myId && !db.techniciens.some(t=>t.id===myId)) myId='';
   sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.map(t=>`<option value="${t.id}" ${t.id===myId?'selected':''}>${esc(t.nom)}</option>`).join('');
+  // Mode lien technicien : verrouillage
+  const monNav=document.querySelectorAll('#view-mon .mon-nav button'); const fullBtn=monNav.length?monNav[monNav.length-1]:null;
+  if(techLinkMode){ sel.disabled=true; sel.style.opacity='.9'; if(fullBtn) fullBtn.style.display='none'; }
   const box=document.getElementById('monBody');
-  if(!myId){ box.innerHTML='<div class="empty" style="margin-top:18px">👆 Sélectionnez votre nom en haut pour voir votre planning.</div>'; return; }
+  if(!myId){ box.innerHTML='<div class="empty" style="margin-top:18px">'+(techLinkMode?'Lien non valide. Contactez votre responsable.':'👆 Sélectionnez votre nom en haut pour voir votre planning.')+'</div>'; return; }
+  const myRole=(db.techniciens.find(t=>t.id===myId)||{}).role||'';
   const wk=isoWeek(monWeekStart); const end=new Date(monWeekStart); end.setDate(end.getDate()+5); const todayStr=ymd(new Date());
   let html='<div class="mon-weekh">Semaine '+wk+'<br><span style="font-weight:500;color:var(--muted);font-size:13px">du '+monWeekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</span></div>';
   for(let i=0;i<6;i++){ const d=new Date(monWeekStart); d.setDate(d.getDate()+i); const ds=ymd(d); const ferie=frenchHolidays(d.getFullYear()).has(ds);
     const ps=posesAt(ds,myId);
     html+='<div class="mon-day'+(ds===todayStr?' today':'')+'"><div class="mon-dname"><span>'+JOURS[i]+' '+d.toLocaleDateString('fr-FR')+'</span>'+(ferie?'<span class="ferie">Férié</span>':'')+'</div>';
     if(ferie){ html+='<div class="mon-ferie-badge">Jour férié</div>'; }
-    if(!ps.length && !ferie){ html+='<div class="mon-empty">Rien de prévu</div>'; }
+    const w=d.getDay(); const ouvre=(w>=1&&w<=5);
+    if(!ps.length && !ferie && ouvre && (myRole==='sav'||myRole==='entretien')){ const sc=statusColor(myRole); html+='<div class="mon-item" style="border-left-color:'+sc+'"><div class="mon-titre">'+POSE_STATUS[myRole].label+'</div></div>'; }
+    else if(!ps.length && !ferie){ html+='<div class="mon-empty">Rien de prévu</div>'; }
     ps.forEach(p=>{ const col=poseColor(p); const titre=poseLabel(p);
       const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
       let mates=[];
@@ -1204,18 +1233,29 @@ function renderTypeBanner(){ const box=document.getElementById('typeBanner'); if
   box.innerHTML=DRAG_TYPES.map(([t,lbl])=>{ const col=statusColor(t);
     return `<div class="ch-card" draggable="true" style="border-left-color:${col};padding:5px 9px;margin:0;font-size:12px;font-weight:600" ondragstart="typeDragStart(event,'${t}')" ondragend="chDragEnd(event)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:5px"></span>${lbl}</div>`; }).join(''); }
 /* Drag & drop */
-let dragChId=null, dragType=null;
-function chDragStart(e,id){ dragChId=id; dragType=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','CH:'+id);}catch(_){}
+let dragChId=null, dragType=null, dragPoseId=null;
+function chDragStart(e,id){ dragChId=id; dragType=null; dragPoseId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','CH:'+id);}catch(_){}
   e.currentTarget.classList.add('dragging'); }
-function typeDragStart(e,t){ dragType=t; dragChId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','TYPE:'+t);}catch(_){}
+function typeDragStart(e,t){ dragType=t; dragChId=null; dragPoseId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','TYPE:'+t);}catch(_){}
   e.currentTarget.classList.add('dragging'); }
-function chDragEnd(e){ e.currentTarget.classList.remove('dragging'); dragChId=null; dragType=null; }
-function cellOver(e){ if(!dragChId&&!dragType) return; e.preventDefault(); e.currentTarget.classList.add('drop-hover'); }
+function poseDragStart(e,id){ dragPoseId=id; dragChId=null; dragType=null; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain','POSE:'+id);}catch(_){} e.currentTarget.classList.add('dragging'); }
+function chDragEnd(e){ e.currentTarget.classList.remove('dragging'); dragChId=null; dragType=null; dragPoseId=null; }
+function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDefault(); e.currentTarget.classList.add('drop-hover'); }
 function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
 function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover');
-  if(dragChId){ placeChantier(dragChId,ds,techId); return; }
+  if(dragPoseId){ movePose(dragPoseId,ds,techId); return; }
+  if(dragChId){ const id=dragChId; placeChantier(id,ds,techId); openSortirDialog(id); return; }
   if(dragType){ placeType(dragType,ds,techId); return; }
-  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('CH:')) placeChantier(data.slice(3),ds,techId); else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')) movePose(data.slice(5),ds,techId); else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); openSortirDialog(id); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+let sortirChId=null;
+function openSortirDialog(chId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch||ch.horsListe) return; sortirChId=chId; document.getElementById('sortirMsg').textContent='« '+ch.client+' » est planifié. Le sortir de la liste des chantiers à planifier ?'; document.getElementById('sortirBg').classList.add('open'); }
+function sortirOui(){ const ch=db.chantiers.find(c=>c.id===sortirChId); if(ch){ ch.horsListe=true; persist(); } document.getElementById('sortirBg').classList.remove('open'); renderPlanning(); toast('Chantier sorti de la liste','ok'); }
+function sortirNon(){ document.getElementById('sortirBg').classList.remove('open'); }
+function movePose(id,ds,techId){ const p=db.poses.find(x=>x.id===id); if(!p) return; if(p.date===ds&&p.techId===techId){ dragPoseId=null; return; }
+  // évite un doublon exact sur la case cible
+  const dup=db.poses.some(x=>x!==p&&x.type===p.type&&x.date===ds&&x.techId===techId&&(p.chantierId?x.chantierId===p.chantierId:(x.label||'')===(p.label||'')));
+  if(dup){ db.poses=db.poses.filter(x=>x!==p); } else { p.date=ds; p.techId=techId; }
+  dragPoseId=null; persist(); renderPlanning(); toast('Tâche déplacée','ok'); }
 function placeType(type,ds,techId){ if(!db.poses.some(p=>p.type===type&&p.techId===techId&&p.date===ds)){ db.poses.push({id:uid(),type,techId,date:ds,note:'',groupId:uid()}); } persist(); renderPlanning(); }
 function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch) return;
   // Un seul jour par dépôt : glissez le chantier autant de fois que nécessaire (jours / techniciens)
@@ -1317,8 +1357,14 @@ function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDa
   persist(); closeTask(); renderPlanning(); }
 function deleteTask(){ const ctx=taskCtx; if(!ctx) return; if(!confirm('Supprimer cette tâche ?')) return;
   db.poses=db.poses.filter(p=>!blockFilter(ctx)(p));
-  if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); const others=db.poses.some(p=>p.chantierId===ctx.chantierId); if(ch&&!others&&ch.statut==='planifie') ch.statut='previsionnel'; }
-  persist(); closeTask(); renderPlanning(); }
+  let ask=null;
+  if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); const others=db.poses.some(p=>p.chantierId===ctx.chantierId); if(ch&&!others){ if(ch.statut==='planifie') ch.statut='previsionnel'; if(ch.horsListe) ask=ctx.chantierId; } }
+  persist(); closeTask(); renderPlanning();
+  if(ask) openRemettreDialog(ask); else toast('Tâche supprimée','ok'); }
+let remettreChId=null;
+function openRemettreDialog(chId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch) return; remettreChId=chId; document.getElementById('remettreMsg').textContent='« '+ch.client+' » a été retiré du planning. Le remettre dans la liste des chantiers à planifier ?'; document.getElementById('remettreBg').classList.add('open'); }
+function remettreOui(){ const ch=db.chantiers.find(c=>c.id===remettreChId); if(ch){ ch.horsListe=false; if(ch.statut==='planifie')ch.statut='previsionnel'; persist(); } document.getElementById('remettreBg').classList.remove('open'); renderPlanning(); updateBadges(); toast('Chantier remis dans la liste','ok'); }
+function remettreNon(){ document.getElementById('remettreBg').classList.remove('open'); }
 function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
   if(p.type!=='chantier'){ const lbl=(POSE_STATUS[p.type]||{}).label||p.type; alert(lbl+(p.note?' : '+p.note:'')); return; }
   const ch=p.chantierId?db.chantiers.find(c=>c.id===p.chantierId):null;
@@ -1503,7 +1549,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const open=[...do
 document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{ if(e.target===bg) bg.classList.remove('open'); }));
 /* Conserver la position de défilement quand une mise à jour cloud redessine */
 const _rerender0=rerender; rerender=function(){ const y=window.scrollY; _rerender0(); window.scrollTo(0,y); };
-showView((()=>{ try{ return localStorage.getItem('acf_montech')?'mon':'plantech'; }catch(e){ return 'plantech'; } })());
+showView(techLinkMode?'mon':'plantech');
 setupWheel();
 cloudInit();
 </script>
