@@ -828,6 +828,7 @@ function matAlertActive(ch){ if((ch.matEtat||'non')!=='non'||ch.statut==='termin
 function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||chDefaultColor(); } return ch.couleur||chDefaultColor(); }
 function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine' && !c.horsListe); }
 function matRank(c){ return (c.matEtat==='recu')?0:((c.matEtat==='cmd')?1:2); }
+function planCmp(a,b){ return matRank(a)-matRank(b) || (chMonths(a)[0]||'9999-99').localeCompare(chMonths(b)[0]||'9999-99') || (a.client||'').toLowerCase().localeCompare((b.client||'').toLowerCase()); }
 function matTag(c){ return (c.matEtat==='recu')?' · <b style="color:#1a7f3c">✅ reçu</b>':((c.matEtat==='cmd')?' · <span style="color:#1d4ed8">📦 commandé</span>':(matAlertActive(c)?' · ⚠ matériel':'')); }
 let chantierSort={key:'recep',dir:1};
 let chMatFilter='all';
@@ -1257,7 +1258,7 @@ function renderMon(){
 }
 function renderBanner(){
   const box=document.getElementById('chantierBanner'); const si=document.getElementById('searchPlanChantier'); const q=(si&&si.value||'').toLowerCase();
-  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=> matRank(a)-matRank(b) || (a.mois||'').localeCompare(b.mois||''));
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort(planCmp);
   if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">'+(q?'Aucun chantier trouvé.':'Aucun chantier à planifier.')+'</div>'; return; }
   box.innerHTML=list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id);
     return `<div class="ch-card" draggable="true" style="border-left-color:${esc(chantierColor(c))}" ondragstart="chDragStart(event,'${c.id}')" ondragend="chDragEnd(event)">
@@ -1325,7 +1326,7 @@ function closeCellPick(){ document.getElementById('cellPickBg').classList.remove
 function cellCheckedTechs(){ const ids=[...document.querySelectorAll('#cellTechs .ctk:checked')].map(c=>c.value); return ids.length?ids:(cellCtx?[cellCtx.techId]:[]); }
 function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); toast('Chantier libre créé','ok'); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
-  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=> matRank(a)-matRank(b) || (a.client||'').localeCompare(b.client||'')).slice(0,80);
+  const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort(planCmp).slice(0,80);
   const box=document.getElementById('cellPickList');
   box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${matTag(c)}${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
 function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:'chantier',chantierId:id,techId:tid,date:cellCtx.ds,note:''}); }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); setTimeout(()=>openSortirDialog(id),60); }
