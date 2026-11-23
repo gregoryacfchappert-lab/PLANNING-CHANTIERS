@@ -105,7 +105,13 @@
   .plan-fit{width:100%;} .plan-fit .plan-corner,.plan-fit .plan-day{width:96px;}
   .plan-fit .plan-chip{white-space:normal;word-break:break-word;}
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
-  .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;}
+  .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;position:relative;}
+  .plan-chip.has-repas{padding-right:22px;} .repas-badge{position:absolute;top:2px;right:3px;font-size:14px;line-height:1;filter:drop-shadow(0 0 1px rgba(255,255,255,.9));}
+  /* Vue technicien : chantier occupe toute la case, divisée si plusieurs */
+  td.plan-cell-ro{height:82px;padding:3px;}
+  .plan-cell-ro .cell-fill{display:flex;flex-direction:column;gap:3px;height:100%;}
+  .plan-cell-ro .cell-fill .plan-chip{flex:1 1 0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:15px;min-height:0;}
+  .plan-cell-ro .cell-fill .plan-chip b{display:block;}
   .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
   .plan-cell.plan-ferie{background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 6px,#e2e8f0 6px,#e2e8f0 12px);}
   .plan-chip b{display:block;font-weight:700;}
@@ -117,9 +123,45 @@
   .cfg-month-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .cfg-month-row:hover{background:var(--gris);}
   .ast-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .ast-row:hover{background:var(--gris);}
   @media print{ .topnav,.plan-banner,.no-print,.addp{display:none!important;} }
+  /* ===== Ergonomie / lisibilité ===== */
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.navlink:focus-visible{outline:2px solid var(--bleu);outline-offset:1px;}
+  input:focus,textarea:focus,select:focus{border-color:var(--bleu);box-shadow:0 0 0 3px var(--bleu-clair);outline:none;}
+  .navlink{transition:.15s;} .navlink:hover{background:var(--gris);color:var(--bleu);}
+  .navlink.active{box-shadow:inset 0 -2px 0 var(--bleu);}
+  h2.page-h{font-size:22px;font-weight:800;}
+  /* Planning : survols */
+  .plan-cell{transition:background .12s;}
+  .plan-cell:not(.plan-ferie):hover{background:#f3f7ff;}
+  .plan-chip{transition:transform .08s,filter .12s;box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  .plan-chip:not(.plan-default):hover{filter:brightness(1.06);transform:translateY(-1px);}
+  tr.plan-today td{background:#fbfcff;} tr.plan-today .plan-day{background:var(--bleu-clair);box-shadow:inset 3px 0 0 var(--bleu);}
+  .addp{font-size:18px;transition:.12s;}
+  /* Cartes KPI : accent + survol */
+  .kpi{transition:.15s;position:relative;overflow:hidden;} .kpi:hover{box-shadow:0 4px 14px rgba(27,58,140,.12);transform:translateY(-1px);}
+  .kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--bleu);opacity:.6;}
+  .kpi.kpi-warn:before{background:var(--rouge);} .kpi.kpi-ok:before{background:#1a9d5a;}
+  /* Modale : animation + flou de fond */
+  .modal-bg{backdrop-filter:blur(2px);} .modal-bg.open .modal{animation:modalin .16s ease;}
+  @keyframes modalin{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+  .modal h3{font-size:18px;}
+  /* Boutons d'action plus visibles */
+  .ch-card{transition:box-shadow .12s,transform .08s;} .ch-card:hover{box-shadow:0 2px 10px rgba(0,0,0,.08);}
+  /* Toasts */
+  #toastWrap{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+  .toast{background:#1f2733;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 6px 24px rgba(0,0,0,.3);animation:toastin .2s ease;max-width:90vw;}
+  .toast.ok{background:#1a7f3c;} .toast.err{background:var(--rouge);}
+  @keyframes toastin{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  /* Responsive */
+  @media(max-width:900px){
+    .plan-layout{flex-direction:column;} .plan-banner{position:static;flex:auto;max-height:none;width:100%;}
+    .topnav{gap:2px;padding:8px 10px;} .topnav .brand{width:100%;margin-bottom:4px;}
+    .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
+    .wrap{margin:14px auto;padding:0 10px;}
+  }
 </style>
 </head>
 <body>
+<div id="toastWrap"></div>
 
 <!-- ÉCRAN DE CONNEXION (synchro cloud) -->
 <div id="loginBg" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1b3a8c,#0d1f4d);align-items:center;justify-content:center">
@@ -137,14 +179,14 @@
 
 <div class="topnav" id="topnav">
   <span class="brand">ACF <span>CHAPPERT</span> · Planning</span>
-  <button class="navlink" id="nav-dash" onclick="showView('dash')">Tableau de bord</button>
-  <button class="navlink" id="nav-planning" onclick="showView('planning')">Planning</button>
-  <button class="navlink" id="nav-chantiers" onclick="showView('chantiers')">Chantiers <span id="chantBadge" class="nav-badge"></span></button>
-  <button class="navlink" id="nav-prev" onclick="showView('prev')">Prévisionnel</button>
-  <button class="navlink" id="nav-propo" onclick="showView('propo')">Proposition</button>
-  <button class="navlink" id="nav-tech" onclick="showView('tech')">Techniciens</button>
-  <button class="navlink" id="nav-com" onclick="showView('com')">Commerciaux</button>
-  <button class="navlink" id="nav-params" onclick="showView('params')">Paramètres</button>
+  <button class="navlink" id="nav-dash" onclick="showView('dash')">📊 Tableau de bord</button>
+  <button class="navlink" id="nav-planning" onclick="showView('planning')">🗓 Planning</button>
+  <button class="navlink" id="nav-chantiers" onclick="showView('chantiers')">🏗 Chantiers <span id="chantBadge" class="nav-badge"></span></button>
+  <button class="navlink" id="nav-prev" onclick="showView('prev')">📅 Prévisionnel</button>
+  <button class="navlink" id="nav-propo" onclick="showView('propo')">💡 Proposition</button>
+  <button class="navlink" id="nav-tech" onclick="showView('tech')">👷 Techniciens</button>
+  <button class="navlink" id="nav-com" onclick="showView('com')">🧑‍💼 Commerciaux</button>
+  <button class="navlink" id="nav-params" onclick="showView('params')">⚙ Paramètres</button>
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
   <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
@@ -451,6 +493,7 @@
   </div>
   <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
   <div class="mfield" id="taskComRow" style="display:none"><label>Commercial (couleur de la case)</label><select id="taskCom"></select></div>
+  <div class="mfield" id="taskRepasRow" style="display:none"><label><input type="checkbox" id="taskRepas" style="margin-right:7px;vertical-align:-1px">🍽 Repas à l'extérieur (affiche le symbole sur la case)</label></div>
   <div class="mfield"><label>Note</label><input id="taskNote"></div>
   <div class="mfield" id="taskAddRow" style="display:none"><label>Ajouter d'autres techniciens à ce chantier (mêmes jours)</label>
     <div id="taskAddTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:110px;overflow:auto;margin-bottom:6px"></div>
@@ -676,7 +719,7 @@ function saveTech(){ const t={ id:editTechId||uid(), nom:val('tNom').trim(), tel
   applyCoursWeeks(t);
   persist(); closeTech(); renderTech();
   if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
-  if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
+  if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); toast('Technicien enregistré','ok'); }
 function deleteTech(){ if(!editTechId) return; if(!confirm('Supprimer ce technicien ?')) return; db.techniciens=db.techniciens.filter(t=>t.id!==editTechId); persist(); closeTech(); renderTech(); }
 
 /* ===== Commerciaux ===== */
@@ -795,6 +838,7 @@ function saveChantier(){
   persist(); closeChantier(); renderChantiers(); updateBadges();
   if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
   if(document.getElementById('view-prev').classList.contains('active')) renderPrev();
+  toast('Chantier enregistré','ok');
 }
 function deleteChantier(){ if(!editChId) return; if(!confirm('Supprimer ce chantier ?')) return; db.chantiers=db.chantiers.filter(x=>x.id!==editChId); db.poses=db.poses.filter(p=>p.chantierId!==editChId); persist(); closeChantier(); renderChantiers(); updateBadges(); }
 function refNum(c){ const m=(c.ref||'').match(/(\d+)\s*$/); return m?parseInt(m[1]):0; }
@@ -805,7 +849,7 @@ function dateChantiersByNum(){
   const today=new Date(); today.setHours(0,0,0,0); const n=sorted.length;
   sorted.forEach((c,i)=>{ const d=new Date(today); d.setDate(d.getDate()-(n-1-i)); c.dateSignature=ymd(d); });
   persist(); renderChantiers();
-  alert(n+' chantiers datés : du '+fdate(new Date(ymd(new Date(today.getTime()-(n-1)*86400000))+'T00:00:00'))+' (n° le plus bas) au '+fdate(today)+' (n° le plus haut).');
+  toast(n+' chantiers datés (du plus ancien au plus récent n°)','ok');
 }
 
 /* ===== Prévisionnel (mensuel) ===== */
@@ -1053,12 +1097,13 @@ function buildWeekTable(wkStart, ro){
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
       if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5){ const sc=statusColor(role); defc=`<div class="plan-chip plan-default" style="background:${sc};color:${textOn(sc)}"><b>${POSE_STATUS[role].label}</b></div>`; } }
-      return `<td class="plan-cell" ${cellAttr}>`+ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
+      const inner=ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
-        const repas=(p.type==='chantier'&&p.chantierId)?(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt:false;
+        const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
-        return `<div class="plan-chip${dim?' dimmed':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}${repas?' 🍽':''}</b>${sub?esc(sub.slice(0,30)):''}</div>`;
-      }).join('')+defc+(ro?'':'<span class="addp">＋</span>')+'</td>'; }).join('');
+        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
+      }).join('')+defc;
+      return ro ? `<td class="plan-cell plan-cell-ro"><div class="cell-fill">${inner}</div></td>` : `<td class="plan-cell" ${cellAttr}>${inner}<span class="addp">＋</span></td>`; }).join('');
     html+='</tr>'; }
   html+='</tbody></table>'; return html;
 }
@@ -1111,7 +1156,7 @@ function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chI
   // Un seul jour par dépôt : glissez le chantier autant de fois que nécessaire (jours / techniciens)
   if(!db.poses.some(p=>p.chantierId===chId&&p.techId===techId&&p.date===ds)){
     db.poses.push({id:uid(),type:'chantier',chantierId:chId,techId,date:ds,note:''}); }
-  ch.statut='planifie'; persist(); renderPlanning();
+  ch.statut='planifie'; persist(); renderPlanning(); toast('Chantier placé','ok');
 }
 function workDaysFrom(startStr, n){ const out=[]; let d=new Date(startStr+'T00:00:00'); let g=0; while(out.length<n && g<400){ g++; const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ymd(d))) out.push(ymd(d)); d.setDate(d.getDate()+1); } return out; }
 function placeChantierDefinitif(ch){
@@ -1133,7 +1178,7 @@ function openCellPick(ds,techId){ cellCtx={ds,techId};
   document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellNewName'); if(s) s.focus();},50); }
 function closeCellPick(){ document.getElementById('cellPickBg').classList.remove('open'); }
 function cellCheckedTechs(){ const ids=[...document.querySelectorAll('#cellTechs .ctk:checked')].map(c=>c.value); return ids.length?ids:(cellCtx?[cellCtx.techId]:[]); }
-function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); }
+function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); toast('Chantier libre créé','ok'); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
   const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.client||'').localeCompare(b.client||'')).slice(0,80);
   const box=document.getElementById('cellPickList');
@@ -1151,7 +1196,7 @@ function poseClick(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
 function blockFilter(ctx){ if(ctx.chantierId) return p=>p.type==='chantier'&&p.chantierId===ctx.chantierId&&p.techId===ctx.techId;
   if(ctx.groupId) return p=>p.groupId===ctx.groupId; return p=>p.id===ctx.id; }
 let taskCtx=null;
-function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||''};
+function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||'',repasExt:!!p.repasExt};
   const fwd=db.poses.filter(blockFilter(taskCtx)).filter(x=>x.date>=p.date).length;
   document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
   v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
@@ -1159,6 +1204,8 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   const isLabelCh=(p.type==='chantier'&&!p.chantierId);
   const cr=document.getElementById('taskComRow'); cr.style.display=isLabelCh?'block':'none';
   if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
+  document.getElementById('taskRepasRow').style.display=(p.type==='chantier')?'block':'none';
+  document.getElementById('taskRepas').checked=!!p.repasExt;
   const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
   document.getElementById('taskConvertBtn').style.display=(p.type==='autre')?'inline-flex':'none';
   const ar=document.getElementById('taskAddRow');
@@ -1177,7 +1224,7 @@ let taskAddCtx=null;
 function addTechsToChantier(){ if(!taskAddCtx) return; const techs=[...document.querySelectorAll('#taskAddTechs .atk:checked')].map(c=>c.value); if(!techs.length){ alert('Cochez au moins un technicien.'); return; }
   const {chantierId,label,commercialId,dates}=taskAddCtx;
   techs.forEach(tid=>dates.forEach(ds=>{ const dup=db.poses.some(p=>p.type==='chantier'&&p.techId===tid&&p.date===ds&&(chantierId?p.chantierId===chantierId:(p.label||'')===(label||''))); if(!dup){ const np={id:uid(),type:'chantier',techId:tid,date:ds,note:''}; if(chantierId) np.chantierId=chantierId; else { if(label)np.label=label; if(commercialId)np.commercialId=commercialId; } db.poses.push(np); } }));
-  persist(); closeTask(); renderPlanning(); }
+  persist(); closeTask(); renderPlanning(); toast('Technicien(s) ajouté(s) au chantier','ok'); }
 function convertToChantier(){ if(!taskCtx||taskCtx.type!=='autre') return;
   taskCtx.type='chantier'; if(!taskCtx.label) taskCtx.label=(val('taskNote').trim()||'Chantier'); v('taskNote','');
   document.getElementById('taskName').textContent=taskCtx.label+' — Chantier';
@@ -1189,16 +1236,19 @@ function closeTask(){ document.getElementById('taskBg').classList.remove('open')
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
   if(!start||!techId){ alert('Date et technicien requis.'); return; }
   if(ctx.type==='chantier'&&!ctx.chantierId){ ctx.commercialId=val('taskCom')||''; }
+  if(ctx.type==='chantier'){ ctx.repasExt=document.getElementById('taskRepas').checked; }
   // retire la partie du bloc à partir de la date cliquée
   db.poses=db.poses.filter(p=>!(blockFilter(ctx)(p)&&p.date>=ctx.date));
   const gid=ctx.chantierId? null : (ctx.groupId||uid());
   let cur=new Date(start+'T00:00:00'), placed=0;
   while(placed<N){ const w=cur.getDay(); if(w>=1&&w<=5){ const d2=ymd(cur); // jours ouvrés : lundi→vendredi (hors week-end)
       const dup=db.poses.some(p=>p.type===ctx.type&&p.date===d2&&p.techId===techId&&(ctx.chantierId?p.chantierId===ctx.chantierId:p.groupId===gid));
-      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } db.poses.push(np); }
+      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } if(ctx.type==='chantier'&&ctx.repasExt) np.repasExt=true; db.poses.push(np); }
       placed++; }
     cur.setDate(cur.getDate()+1); }
   if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); if(ch) ch.statut='planifie'; }
+  /* Repas : propager à toutes les cases portant le même libellé */
+  if(ctx.type==='chantier' && !ctx.chantierId && ctx.label){ db.poses.forEach(p=>{ if(p.type==='chantier'&&!p.chantierId&&(p.label||'')===ctx.label){ if(ctx.repasExt) p.repasExt=true; else delete p.repasExt; } }); }
   persist(); closeTask(); renderPlanning(); }
 function deleteTask(){ const ctx=taskCtx; if(!ctx) return; if(!confirm('Supprimer cette tâche ?')) return;
   db.poses=db.poses.filter(p=>!blockFilter(ctx)(p));
@@ -1382,6 +1432,12 @@ function v(id,x){ const e=document.getElementById(id); if(e) e.value=x; }
 
 /* ===== Init ===== */
 updateBadges();
+/* ===== Ergonomie : toasts, fermeture modales, défilement ===== */
+function toast(msg,kind){ const w=document.getElementById('toastWrap'); if(!w) return; const el=document.createElement('div'); el.className='toast'+(kind?(' '+kind):''); el.textContent=msg; w.appendChild(el); setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),320); }, 2600); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const open=[...document.querySelectorAll('.modal-bg.open')]; if(open.length){ open[open.length-1].classList.remove('open'); } } });
+document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{ if(e.target===bg) bg.classList.remove('open'); }));
+/* Conserver la position de défilement quand une mise à jour cloud redessine */
+const _rerender0=rerender; rerender=function(){ const y=window.scrollY; _rerender0(); window.scrollTo(0,y); };
 showView('plantech');
 setupWheel();
 cloudInit();
