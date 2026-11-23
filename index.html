@@ -310,6 +310,7 @@
       <button class="ghost" onclick="dateChantiersByNum()">📅 Dater par n°</button>
       <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
     </div>
+    <div id="chMatFilter" style="display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap;align-items:center"></div>
     <div id="chantierTableWrap"></div>
   </div>
 </div>
@@ -440,8 +441,10 @@
   <div class="mfield"><label>Date de pose définitive (place automatiquement le chantier sur le planning des techniciens pressentis)</label>
     <input id="chPoseDate" type="date"></div>
   <div class="mrow">
-    <div class="mfield"><label>Matériel commandé ?</label>
-      <select id="chMat"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+    <div class="mfield"><label>Commande matériel</label>
+      <select id="chMat"><option value="non">🔸 Non commandé</option><option value="cmd">📦 Commandé</option><option value="recu">✅ Reçu</option></select></div>
+    <div class="mfield"><label>Date de réception matériel (AR)</label>
+      <input id="chMatRecep" type="date"></div>
     <div class="mfield"><label>Priorité</label>
       <select id="chPrio"><option value="normale">Normale</option><option value="haute">Haute</option><option value="basse">Basse</option></select></div>
   </div>
@@ -622,7 +625,10 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.c
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
   d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.hVendredi==null)d.params.hVendredi=7; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
   if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
-  d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien=''; }); }
+  d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien='';
+    if(c.matEtat==null){ c.matEtat = c.matRecu ? 'recu' : ((c.materiel==='oui')?'cmd':'non'); }
+    if(c.matRecep==null) c.matRecep = c.matRecu || '';
+    c.materiel = (c.matEtat==='non')?'non':'oui'; }); }
 function persistLocal(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){} }
 function persist(){ persistLocal(); if(cloudOn) schedulePush(); }
 /* ===== Synchro cloud (Firebase Realtime Database) ===== */
@@ -815,10 +821,12 @@ function chHoursMonth(ch,m){ if(ch.moisHeures) return +ch.moisHeures[m]||0; if(c
 function chHoursTotal(ch){ if(ch.moisHeures) return Object.values(ch.moisHeures).reduce((s,h)=>s+(+h||0),0); return +ch.heures|| (ch.duree?ch.duree*7.8:0); }
 function configMonths(){ const out=[]; const y0=new Date().getFullYear(); for(let y=y0;y<=y0+1;y++) for(let m=1;m<=12;m++) out.push(y+'-'+String(m).padStart(2,'0')); return out; }
 function matAlertDate(ch){ const ms=chMonths(ch); if(!ms.length) return null; const p=ms[0].split('-'); const d=new Date(+p[0], +p[1]-1, 1); d.setDate(d.getDate()-(db.params.matSem||4)*7); return d; }
-function matAlertActive(ch){ if(ch.materiel==='oui'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
+function matAlertActive(ch){ if((ch.matEtat||'non')!=='non'||ch.statut==='termine') return false; const a=matAlertDate(ch); return a && new Date()>=a; }
 function chantierColor(ch){ if(ch.commercialId){ const c=db.commerciaux.find(x=>x.id===ch.commercialId); if(c) return c.couleur||chDefaultColor(); } return ch.couleur||chDefaultColor(); }
 function chantiersToPlan(){ return db.chantiers.filter(c=>c.statut!=='termine' && !c.horsListe); }
 let chantierSort={key:'recep',dir:1};
+let chMatFilter='all';
+function setMatFilter(f){ chMatFilter=f; renderChantiers(); }
 function setChantierSort(k){ if(chantierSort.key===k) chantierSort.dir*=-1; else chantierSort={key:k,dir:1}; renderChantiers(); }
 function chantierSortVal(c,k){ switch(k){
   case 'ref': return refNum(c);
@@ -826,21 +834,34 @@ function chantierSortVal(c,k){ switch(k){
   case 'commercial': return (comName(c.commercialId)||'~~~').toLowerCase();
   case 'mois': return chMonths(c)[0]||'9999-99';
   case 'duree': return chHoursTotal(c);
-  case 'materiel': return matAlertActive(c)?0:(c.materiel==='oui'?2:1);
-  case 'recep': return c.matRecu? c.matRecu : '9999-99-99';
+  case 'materiel': return matAlertActive(c)?0:({non:1,cmd:2,recu:3}[c.matEtat||'non']);
+  case 'recep': return c.matRecep? c.matRecep : '9999-99-99';
   case 'statut': return {previsionnel:0,planifie:1,termine:2}[c.statut||'previsionnel'];
   default: return 0; } }
-function setMatRecu(id,date){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.matRecu=date||''; persist(); renderChantiers(); }
+function setMatEtat(id,etat){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.matEtat=etat; c.materiel=(etat==='non')?'non':'oui'; persist(); renderChantiers(); updateBadges(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); }
+function setMatRecep(id,date){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.matRecep=date||''; persist(); }
 function thSort(lbl,key){ const a=chantierSort.key===key?(chantierSort.dir>0?' ▲':' ▼'):''; return `<th class="clic" title="Trier" onclick="setChantierSort('${key}')">${lbl}${a}</th>`; }
+function matEtatBadge(c){ const et=c.matEtat||'non';
+  if(et==='recu') return '<span style="color:#1a7f3c;font-weight:700">✅ Reçu</span>';
+  if(et==='cmd') return '<span style="color:#1d4ed8;font-weight:700">📦 Commandé</span>';
+  return matAlertActive(c)?'<span class="alert-pill">⚠ À commander</span>':'<span style="color:var(--muted)">○ Non cmd</span>'; }
 function renderChantiers(){
   const q=(document.getElementById('searchChantier').value||'').toLowerCase();
-  const list=db.chantiers.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q))
-    .sort((a,b)=>{ const va=chantierSortVal(a,chantierSort.key), vb=chantierSortVal(b,chantierSort.key); const r=va<vb?-1:(va>vb?1:(refNum(a)-refNum(b))); return r*chantierSort.dir; });
+  let list=db.chantiers.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q));
+  if(chMatFilter==='cmd') list=list.filter(c=>(c.matEtat||'non')!=='non');
+  else if(chMatFilter==='noncmd') list=list.filter(c=>(c.matEtat||'non')==='non');
+  list=list.sort((a,b)=>{ const va=chantierSortVal(a,chantierSort.key), vb=chantierSortVal(b,chantierSort.key); const r=va<vb?-1:(va>vb?1:(refNum(a)-refNum(b))); return r*chantierSort.dir; });
+  // Barre de filtres état matériel
+  const nTot=db.chantiers.length, nNon=db.chantiers.filter(c=>(c.matEtat||'non')==='non').length, nCmd=nTot-nNon;
+  const fb=(key,lbl,n)=>`<button class="small${chMatFilter===key?' primary':''}" onclick="setMatFilter('${key}')">${lbl} (${n})</button>`;
+  const fbar=document.getElementById('chMatFilter'); if(fbar) fbar.innerHTML='<span style="font-size:12px;color:var(--muted);margin-right:2px">Commande matériel :</span>'+fb('all','Tous',nTot)+fb('noncmd','🔸 Non commandés',nNon)+fb('cmd','📦 Commandés',nCmd);
   const w=document.getElementById('chantierTableWrap');
-  if(!list.length){ w.innerHTML='<div class="empty">Aucun chantier. Cliquez sur « ＋ Nouveau chantier ».</div>'; return; }
-  const todayStr=ymd(new Date());
-  w.innerHTML='<table class="grid"><thead><tr>'+thSort('Réf.','ref')+thSort('Client','client')+thSort('Commercial','commercial')+thSort('Mois prévu','mois')+thSort('Durée','duree')+'<th>Fichiers</th>'+thSort('Cmd.','materiel')+thSort('Réception matériel','recep')+'<th></th></tr></thead><tbody>'+
-    list.map(c=>{ const alert=matAlertActive(c); const ms=chMonths(c);
+  if(!list.length){ w.innerHTML='<div class="empty">Aucun chantier'+(chMatFilter!=='all'?' pour ce filtre.':'. Cliquez sur « ＋ Nouveau chantier ».')+'</div>'; return; }
+  w.innerHTML='<table class="grid"><thead><tr>'+thSort('Réf.','ref')+thSort('Client','client')+thSort('Commercial','commercial')+thSort('Mois prévu','mois')+thSort('Durée','duree')+'<th>Fichiers</th>'+thSort('Matériel','materiel')+thSort('Réception + actions','recep')+'<th></th></tr></thead><tbody>'+
+    list.map(c=>{ const ms=chMonths(c); const et=c.matEtat||'non';
+      const actions = et==='non' ? `<button class="small" title="Marquer comme commandé" onclick="setMatEtat('${c.id}','cmd')">📦 Commander</button>`
+        : et==='cmd' ? `<button class="small" title="Marquer comme reçu" onclick="setMatEtat('${c.id}','recu')">✅ Reçu</button><button class="small rouge" title="Annuler la commande" onclick="setMatEtat('${c.id}','non')">✖ Annuler</button>`
+        : `<button class="small" title="Annuler la réception (repasse en commandé)" onclick="setMatEtat('${c.id}','cmd')">↩ Annuler réception</button>`;
       return `<tr>
       <td class="clic" onclick="openChantierModal('${c.id}')"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${esc(chantierColor(c))};margin-right:6px"></span>${esc(c.ref)}</td>
       <td class="clic" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b></td>
@@ -848,14 +869,13 @@ function renderChantiers(){
       <td>${ms.length?ms.map(m=>esc(monthLabel(m))).join(', '):'<span style="color:var(--rouge)">à définir</span>'}</td>
       <td>${esc(chHoursTotal(c)+' h')}</td>
       <td>${(()=>{ const n=(c.files&&c.files.length)||(c.devisFile?1:0); return n?('📎 '+n+(c.repasExt?' · 🍽':'')):(c.repasExt?'🍽':'—'); })()}</td>
-      <td>${c.materiel==='oui'?'✅':(alert?'<span class="alert-pill">⚠</span>':'—')}</td>
-      <td style="white-space:nowrap"><input type="date" value="${c.matRecu||''}" onchange="setMatRecu('${c.id}',this.value)" title="Date de réception matériel (AR)" style="padding:4px 6px;border:1px solid ${c.matRecu?'#1a9d5a':'var(--bord)'};border-radius:6px;font-size:12px;${c.matRecu?'background:#eafaef':''}">${c.matRecu?'<span style="color:#1a7f3c;font-weight:700;margin-left:5px">✓ reçu</span>':`<button class="small" style="margin-left:5px" onclick="setMatRecu('${c.id}','${todayStr}')">📦 Reçu</button>`}</td>
+      <td>${matEtatBadge(c)}</td>
+      <td style="white-space:nowrap"><input type="date" value="${c.matRecep||''}" onchange="setMatRecep('${c.id}',this.value)" title="Date de réception matériel (AR) — saisie manuelle, ne change pas l'état" style="padding:4px 6px;border:1px solid ${et==='recu'?'#1a9d5a':'var(--bord)'};border-radius:6px;font-size:12px;${et==='recu'?'background:#eafaef':''}">
+        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${actions}</div></td>
       <td class="row-act"><button class="small" onclick="openChantierModal('${c.id}')">✎</button>
-        ${c.materiel!=='oui'?`<button class="small" title="Marquer matériel commandé" onclick="markMat('${c.id}')">📦 Commandé</button>`:''}
         <button class="small rouge" onclick="delChantierRow('${c.id}')">🗑</button></td></tr>`;
     }).join('')+'</tbody></table>';
 }
-function markMat(id){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; c.materiel='oui'; persist(); renderChantiers(); updateBadges(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
 function delChantierRow(id){ if(!confirm('Supprimer ce chantier ? (ses tâches planifiées seront retirées)')) return; db.chantiers=db.chantiers.filter(x=>x.id!==id); db.poses=db.poses.filter(p=>p.chantierId!==id); persist(); renderChantiers(); updateBadges(); }
 let editChId=null;
 function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(x=>x.id===id):null;
@@ -868,7 +888,7 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
   document.getElementById('chTechs').innerHTML = db.techniciens.length ? db.techniciens.map(t=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" class="chtk" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${esc(t.nom)}</label>`).join('') : '<span style="color:var(--muted);font-size:12px">Aucun technicien créé.</span>';
   document.getElementById('chCom').innerHTML='<option value="">—</option>'+db.commerciaux.map(x=>`<option value="${x.id}" ${c&&c.commercialId===x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
   v('chClient',c&&c.client||''); v('chSign',c&&c.dateSignature||''); v('chAdresse',c&&c.adresse||''); v('chTel',c&&c.tel||''); v('chNbTech',(c&&c.nbTechs)||1); v('chPoseDate',c&&c.poseDate||'');
-  v('chDuree',c&&c.duree||1); v('chMat',c&&c.materiel||'non'); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||''); v('chLien',c&&c.lien||'');
+  v('chDuree',c&&c.duree||1); v('chMat',c&&c.matEtat||'non'); v('chMatRecep',c&&c.matRecep||''); v('chPrio',c&&c.prio||'normale'); v('chDesc',c&&c.desc||''); v('chLien',c&&c.lien||'');
   document.getElementById('chRepas').checked = !!(c&&c.repasExt);
   chFilesTmp = (c&&c.files)? c.files.slice() : (c&&c.devisFile? [c.devisFile] : []); renderFilesInfo();
   chMoisTotal();
@@ -890,7 +910,7 @@ function saveChantier(){
   const moisHeures={}; document.querySelectorAll('#chMoisH .cfg-month-row').forEach(r=>{ const cb=r.querySelector('.chmk'); if(cb.checked){ moisHeures[cb.value]=parseFloat(r.querySelector('.chmh').value)||0; } });
   const c={ id:editChId||uid(), ref:'', client:val('chClient').trim(), commercialId:val('chCom'), dateSignature:val('chSign'),
     adresse:val('chAdresse').trim(), tel:val('chTel').trim(), nbTechs:Math.max(1,parseInt(val('chNbTech'))||1), moisHeures, heures:Object.values(moisHeures).reduce((s,h)=>s+h,0),
-    techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), materiel:val('chMat'), prio:val('chPrio'), desc:val('chDesc').trim(),
+    techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), matEtat:val('chMat'), materiel:(val('chMat')==='non'?'non':'oui'), matRecep:val('chMatRecep'), prio:val('chPrio'), desc:val('chDesc').trim(),
     lien:val('chLien').trim(), repasExt:document.getElementById('chRepas').checked, files:chFilesTmp.slice(), devisFile:chFilesTmp[0]||null, poseDate:val('chPoseDate') };
   if(!c.client){ alert('Indiquez le client / chantier.'); return; }
   if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
@@ -1090,6 +1110,9 @@ function exportPropoCsv(){
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='proposition-planning-acf.csv'; a.click();
 }
+let prevMonthOffset=0;
+function prevMonthShift(n){ prevMonthOffset+=n; renderPrev(); }
+function prevMonthToday(){ prevMonthOffset=0; renderPrev(); }
 function renderPrev(){
   const alerts=db.chantiers.filter(matAlertActive);
   document.getElementById('prevAlertBar').innerHTML = alerts.length?
@@ -1098,8 +1121,9 @@ function renderPrev(){
   const wrap=document.getElementById('prevWrap'); const all=chantiersToPlan();
   const byMonth={}; const noMonth=[];
   all.forEach(c=>{ const ms=chMonths(c); if(!ms.length){ noMonth.push(c); } else ms.forEach(m=>{ (byMonth[m]=byMonth[m]||[]).push(c); }); });
-  const months=Object.keys(byMonth).sort();
-  if(!months.length && !noMonth.length){ wrap.innerHTML='<div class="empty">Aucun chantier prévisionnel.</div>'; return; }
+  if(!Object.keys(byMonth).length && !noMonth.length){ wrap.innerHTML='<div class="empty">Aucun chantier prévisionnel.</div>'; return; }
+  const curBase=new Date(); curBase.setDate(1); curBase.setMonth(curBase.getMonth()+prevMonthOffset);
+  const windowMonths=[]; for(let i=0;i<5;i++){ const d=new Date(curBase); d.setMonth(d.getMonth()+i); windowMonths.push(monthKey(d)); }
   // --- Bandeau lissage capacité (respect heures vendues / disponibles) ---
   const lv=levelPrev(); const lvMap={}; lv.rows.forEach(r=>lvMap[r.m]=r);
   const shown=lv.rows.filter(r=>r.vendu>0||r.carryIn>0||r.carryOut>0);
@@ -1113,11 +1137,17 @@ function renderPrev(){
     else html+='<div class="level-foot" style="color:#1a7f3c">✔ Toutes les heures vendues tiennent dans la capacité disponible.</div>';
     html+='</div>';
   }
+  const firstLbl=capFirst(monthLabel(windowMonths[0])), lastLbl=capFirst(monthLabel(windowMonths[4]));
+  html+='<div class="prev-monthnav" style="display:flex;align-items:center;justify-content:center;gap:16px;margin:4px 0 14px;flex-wrap:wrap">'
+    +'<button class="ghost small" onclick="prevMonthShift(-1)">◀ Précédent</button>'
+    +'<div style="text-align:center;min-width:220px"><b style="font-size:15px;color:var(--bleu)">Mois : '+esc(firstLbl)+' → '+esc(lastLbl)+'</b>'+(prevMonthOffset!==0?' &nbsp;<button class="small" onclick="prevMonthToday()">⤺ Mois en cours</button>':'')+'</div>'
+    +'<button class="ghost small" onclick="prevMonthShift(1)">Suivant ▶</button></div>';
   html+='<div class="month-board">';
-  months.forEach(m=>{ const items=byMonth[m]; const totH=items.reduce((s,c)=>s+chHoursMonth(c,m),0); const dispo=netDispoMonth(m); const over=totH>dispo;
-    html+=`<div class="month-col"><div class="month-head">${esc(monthLabel(m))}</div>`+
-      items.map(c=>{ const hm=chHoursMonth(c,m); const multi=chMonths(c).length>1;
-        return `<div class="month-item" style="background:${esc(chantierColor(c))};color:${textOn(chantierColor(c))}" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b><span>${esc(c.ref)} · ${hm} h${multi?' (réparti)':''}${matAlertActive(c)?' · ⚠ matériel':''}</span></div>`; }).join('')+
+  windowMonths.forEach(m=>{ const items=byMonth[m]||[]; const totH=items.reduce((s,c)=>s+chHoursMonth(c,m),0); const dispo=netDispoMonth(m); const over=totH>dispo; const isCur=(m===monthKey(new Date()));
+    html+=`<div class="month-col"><div class="month-head"${isCur?' style="outline:2px solid var(--bleu);outline-offset:-2px"':''}>${esc(capFirst(monthLabel(m)))}${isCur?' •':''}</div>`+
+      (items.length?items.map(c=>{ const hm=chHoursMonth(c,m); const multi=chMonths(c).length>1;
+        return `<div class="month-item" style="background:${esc(chantierColor(c))};color:${textOn(chantierColor(c))}" onclick="openChantierModal('${c.id}')"><b>${esc(c.client)}</b><span>${esc(c.ref)} · ${hm} h${multi?' (réparti)':''}${matAlertActive(c)?' · ⚠ matériel':''}</span></div>`; }).join('')
+        :'<div style="padding:14px 6px;text-align:center;color:var(--muted);font-size:12px">—</div>')+
       `<div class="month-foot" ${over?'style="background:#fdecec;color:var(--rouge)"':''}>${Math.round(totH)} h / ${dispo} h dispo</div></div>`;
   });
   if(noMonth.length){ html+=`<div class="month-col"><div class="month-head" style="background:var(--muted)">Sans mois</div>`+
