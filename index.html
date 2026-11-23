@@ -220,7 +220,7 @@
     <button class="ghost small" onclick="weekToday()">Cette semaine</button>
     <button class="ghost small" onclick="weekShift(1)">▶</button>
     <button class="ghost small" onclick="showView('mon')">📱 Mon planning</button>
-    <button class="primary small" onclick="askAdminAccess()">🔒 Espace gestion</button>
+    <button class="primary small" id="btnGestion" style="display:none" onclick="askAdminAccess()">🔧 Espace gestion</button>
   </div>
   <div class="wrap wrap-full"><div id="planTechWrap"></div></div>
 </div>
@@ -379,8 +379,6 @@
         <div class="mfield"><label>Heures le vendredi / technicien</label>
           <input id="pHVendredi" type="number" min="0" step="0.5" onchange="saveParams()"></div>
       </div>
-      <div class="mfield"><label>Mot de passe espace gestion</label>
-        <input id="pPass" onchange="saveParams()"></div>
       <div class="mfield"><label>Adresse du dépôt (page technicien GitHub Pages)</label>
         <input id="pPages" onchange="saveParams()"></div>
       <div class="mfield"><label>Couleurs des statuts du planning (Congé, Maladie, SAV, Entretien, Cours, Astreinte, Autre)</label>
@@ -640,7 +638,7 @@ function coerceList(v){ if(v==null) return []; return Array.isArray(v)? v.filter
 function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; return d; }
 function clean(x){ return JSON.parse(JSON.stringify(x===undefined?null:x)); }
 function schedulePush(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(pushDiff, 600); }
-function pushDiff(){ if(!cloudOn||!fbDb||mobOnly) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
+function pushDiff(){ if(!cloudOn||!fbDb||mobOnly||!canEdit) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
 function pushAll(){ if(!fbDb) return; const all={}; CLOUD_KEYS.forEach(k=>{ all[k]=clean(db[k]); _shadow[k]=JSON.stringify(db[k]); }); fbDb.ref('db').set(all).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('err')); }
 function setSyncStatus(s){ const el=document.getElementById('syncDot'); if(!el) return; el.className='sync-dot '+(s||''); el.title = s==='ok'?'Synchronisé':(s==='err'?'Erreur de synchro':'Hors ligne (local)'); }
 let currentView='plantech';
@@ -653,18 +651,21 @@ function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
   fbAuth=firebase.auth(); fbDb=firebase.database();
+  try{ fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
   fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else if(mobOnly){ document.getElementById('loginBg').style.display='none'; fbAuth.signInAnonymously().catch(e=>{ document.getElementById('monBody').innerHTML='<div class="empty" style="margin-top:30px">Accès indisponible. Contactez votre responsable.<br><span style="font-size:12px">('+esc(e.code||e.message||'')+')</span></div>'; showView('mon'); }); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
 }
 function onSignedIn(u){
   document.getElementById('loginBg').style.display='none';
-  const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté'; }
+  canEdit = !mobOnly && !!u.email && u.email.toLowerCase()===GESTION_EMAIL;
+  const bg=document.getElementById('btnGestion'); if(bg) bg.style.display=canEdit?'inline-flex':'none';
+  const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=(u.email||'connecté')+(canEdit?'':' · lecture seule'); }
   fbDb.ref('db').once('value').then(snap=>{
     const v=snap.val();
     const cloudHas=v&&((v.chantiers&&coerceList(v.chantiers).length)||(v.techniciens&&coerceList(v.techniciens).length));
     const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
     if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
     else { migr(db); pushAll(); }
-    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(mobOnly) showView('mon'); else rerender();
+    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(mobOnly) showView('mon'); else showView(canEdit?'dash':'plantech');
     CLOUD_KEYS.forEach(k=>{
       fbDb.ref('db/'+k).on('value', s=>{
         const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
@@ -708,6 +709,8 @@ function statusColor(type){ const c=(db.params&&db.params.statutColors||{})[type
 function chDefaultColor(){ return (db.params&&db.params.chColorDefault)||'#1b3a8c'; }
 
 /* ===== Navigation ===== */
+const GESTION_EMAIL='gestion@acfchappert.fr';
+let canEdit=false;
 let adminUnlocked=false;
 function showView(v){
   if(mobOnly) v='mon';
@@ -727,9 +730,7 @@ function showView(v){
   if(v==='params') renderParams();
   updateBadges(); window.scrollTo(0,0);
 }
-function askAdminAccess(){ if(adminUnlocked){ showView('dash'); return; }
-  const pw=prompt('Espace gestion — mot de passe :'); if(pw===null) return;
-  if(pw===(db.params.pass||'')){ adminUnlocked=true; showView('dash'); } else alert('Mot de passe incorrect.'); }
+function askAdminAccess(){ if(canEdit){ showView('dash'); } else { alert('Ce compte est en lecture seule. Connectez-vous avec le compte gestion pour modifier le planning.'); } }
 
 /* ===== Techniciens ===== */
 const ROLE_LBL={montage:'Montage',apprenti:'Apprenti',sav:'SAV',entretien:'Entretien',bureau:'Bureau'};
@@ -1526,7 +1527,7 @@ table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dc
 <div style="text-align:center;color:#66707e;font-size:11px;margin-top:12px">SAS ACF CHAPPERT</div></div></body></html>`; }
 
 /* ===== Paramètres / sauvegarde ===== */
-function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pHVendredi',db.params.hVendredi!=null?db.params.hVendredi:7); v('pPass',db.params.pass||''); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
+function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pHVendredi',db.params.hVendredi!=null?db.params.hVendredi:7); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
 function renderStatutColors(){ const box=document.getElementById('statutColorsBox'); if(!box) return;
   const cw='style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer"'; const lw='style="display:inline-flex;align-items:center;gap:6px;font-size:13px"';
   box.innerHTML=`<label ${lw}><input type="color" value="${chDefaultColor()}" onchange="setChColorDefault(this.value)" ${cw}>Chantier sans commercial</label>`+
@@ -1535,7 +1536,7 @@ function setStatutColor(type,value){ db.params.statutColors=db.params.statutColo
 function setChColorDefault(value){ db.params.chColorDefault=value; persist(); refreshStatutViews(); }
 function resetStatutColors(){ db.params.statutColors={}; db.params.chColorDefault=''; persist(); renderStatutColors(); refreshStatutViews(); }
 function refreshStatutViews(){ if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
-function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.hVendredi=(val('pHVendredi')===''?7:parseFloat(val('pHVendredi'))); db.params.pass=val('pPass'); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
+function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.hVendredi=(val('pHVendredi')===''?7:parseFloat(val('pHVendredi'))); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
 function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
 function exportData(){ const blob=new Blob([JSON.stringify(db)],{type:'application/json;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acf-planning-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
 function importData(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ e.target.value=''; let o; try{o=JSON.parse(ev.target.result);}catch(err){ alert('JSON illisible.'); return; }
