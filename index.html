@@ -54,13 +54,13 @@
   .mrow{display:flex;gap:12px;} .mrow .mfield{flex:1;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
   /* Board mensuel */
-  .month-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;}
-  .month-col{flex:0 0 240px;background:#fff;border:1px solid var(--bord);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
-  .month-head{background:var(--bleu);color:#fff;font-weight:700;text-align:center;padding:9px;text-transform:capitalize;}
+  .month-board{display:flex;gap:14px;overflow:auto;padding-bottom:8px;max-height:calc(100vh - 170px);}
+  .month-col{flex:0 0 240px;background:#fff;border:1px solid var(--bord);border-radius:12px;display:flex;flex-direction:column;align-self:flex-start;min-height:100%;}
+  .month-head{background:var(--bleu);color:#fff;font-weight:700;text-align:center;padding:9px;text-transform:capitalize;position:sticky;top:0;z-index:6;border-radius:12px 12px 0 0;box-shadow:0 2px 4px rgba(0,0,0,.12);}
   .month-item{padding:8px 10px;border-bottom:1px solid var(--bord);cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;}
   .month-item:hover{filter:brightness(.97);}
   .month-item span{font-size:11px;opacity:.85;}
-  .month-foot{margin-top:auto;background:var(--bleu-clair);color:var(--bleu);font-weight:800;text-align:center;padding:9px;font-size:12px;}
+  .month-foot{margin-top:auto;background:var(--bleu-clair);color:var(--bleu);font-weight:800;text-align:center;padding:9px;font-size:12px;position:sticky;bottom:0;z-index:5;border-radius:0 0 12px 12px;box-shadow:0 -2px 4px rgba(0,0,0,.08);}
   .propo-head{background:var(--bleu-clair);color:var(--bleu);font-weight:700;padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:13px;}
   .propo-month{margin-bottom:18px;border:1px solid var(--bord);border-radius:12px;overflow:hidden;background:#fff;}
   .propo-month-h{background:var(--bleu);color:#fff;font-weight:800;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;}
