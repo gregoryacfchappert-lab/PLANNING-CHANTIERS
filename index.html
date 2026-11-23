@@ -634,29 +634,31 @@ function coerceList(v){ if(v==null) return []; return Array.isArray(v)? v.filter
 function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; return d; }
 function clean(x){ return JSON.parse(JSON.stringify(x===undefined?null:x)); }
 function schedulePush(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(pushDiff, 600); }
-function pushDiff(){ if(!cloudOn||!fbDb||techLinkMode) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
+function pushDiff(){ if(!cloudOn||!fbDb||mobOnly) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
 function pushAll(){ if(!fbDb) return; const all={}; CLOUD_KEYS.forEach(k=>{ all[k]=clean(db[k]); _shadow[k]=JSON.stringify(db[k]); }); fbDb.ref('db').set(all).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('err')); }
 function setSyncStatus(s){ const el=document.getElementById('syncDot'); if(!el) return; el.className='sync-dot '+(s||''); el.title = s==='ok'?'Synchronisé':(s==='err'?'Erreur de synchro':'Hors ligne (local)'); }
 let currentView='plantech';
 const _urlTech=(new URLSearchParams(location.search)).get('tech');
 const techLinkMode=!!_urlTech;
+const techShareMode=!techLinkMode && !!(new URLSearchParams(location.search)).get('mob');
+const mobOnly=techLinkMode||techShareMode;
 function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
   fbAuth=firebase.auth(); fbDb=firebase.database();
-  fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else if(techLinkMode){ document.getElementById('loginBg').style.display='none'; fbAuth.signInAnonymously().catch(e=>{ document.getElementById('monBody').innerHTML='<div class="empty" style="margin-top:30px">Accès indisponible. Contactez votre responsable.<br><span style="font-size:12px">('+esc(e.code||e.message||'')+')</span></div>'; showView('mon'); }); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
+  fbAuth.onAuthStateChanged(u=>{ if(u){ onSignedIn(u); } else if(mobOnly){ document.getElementById('loginBg').style.display='none'; fbAuth.signInAnonymously().catch(e=>{ document.getElementById('monBody').innerHTML='<div class="empty" style="margin-top:30px">Accès indisponible. Contactez votre responsable.<br><span style="font-size:12px">('+esc(e.code||e.message||'')+')</span></div>'; showView('mon'); }); } else { cloudOn=false; document.getElementById('loginBg').style.display='flex'; document.getElementById('userBadge').style.display='none'; setSyncStatus(''); } });
 }
 function onSignedIn(u){
   document.getElementById('loginBg').style.display='none';
-  const ub=document.getElementById('userBadge'); if(techLinkMode){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté'; }
+  const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=u.email||'connecté'; }
   fbDb.ref('db').once('value').then(snap=>{
     const v=snap.val();
     const cloudHas=v&&((v.chantiers&&coerceList(v.chantiers).length)||(v.techniciens&&coerceList(v.techniciens).length));
     const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
     if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
     else { migr(db); pushAll(); }
-    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(techLinkMode) showView('mon'); else rerender();
+    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(mobOnly) showView('mon'); else rerender();
     CLOUD_KEYS.forEach(k=>{
       fbDb.ref('db/'+k).on('value', s=>{
         const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
@@ -702,7 +704,7 @@ function chDefaultColor(){ return (db.params&&db.params.chColorDefault)||'#1b3a8
 /* ===== Navigation ===== */
 let adminUnlocked=false;
 function showView(v){
-  if(techLinkMode) v='mon';
+  if(mobOnly) v='mon';
   currentView=v;
   ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
   document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
@@ -732,7 +734,7 @@ function renderTech(){
   const list=db.techniciens.filter(t=>(t.nom||'').toLowerCase().includes(q));
   const w=document.getElementById('techTableWrap');
   if(!list.length){ w.innerHTML='<div class="empty">Aucun technicien.</div>'; return; }
-  w.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Utilisez les flèches ▲▼ pour régler l\'ordre des colonnes dans le planning.</div><table class="grid"><thead><tr><th>Ordre</th><th>Nom</th><th>Rôle</th><th>Astreinte</th><th>Téléphone</th><th></th></tr></thead><tbody>'+
+  w.innerHTML='<div style="background:#eef4ff;border:1px solid #c9d9f5;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px"><b>📱 Lien unique équipe</b> — un seul lien pour tous les techniciens : chacun choisit son nom sur son téléphone.</span><button class="small" onclick="copyShareLink()">🔗 Copier le lien équipe</button></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px">Utilisez les flèches ▲▼ pour régler l\'ordre des colonnes dans le planning.</div><table class="grid"><thead><tr><th>Ordre</th><th>Nom</th><th>Rôle</th><th>Astreinte</th><th>Téléphone</th><th></th></tr></thead><tbody>'+
     list.map(t=>{ const idx=db.techniciens.findIndex(x=>x.id===t.id); return `<tr>
       <td class="row-act" style="white-space:nowrap"><button class="small" onclick="moveTech('${t.id}',-1)" ${idx<=0?'disabled':''} title="Monter">▲</button><button class="small" onclick="moveTech('${t.id}',1)" ${idx>=db.techniciens.length-1?'disabled':''} title="Descendre">▼</button></td>
       <td class="clic" onclick="openTechModal('${t.id}')"><b>${esc(t.nom)}</b></td>
@@ -740,7 +742,9 @@ function renderTech(){
       <td>${t.astreinte?'✅':'—'}</td><td>${esc(t.tel||'')}</td>
       <td class="row-act"><button class="small" title="Lien personnel (à envoyer au technicien)" onclick="copyTechLink('${t.id}')">🔗 Lien</button><button class="small" onclick="openTechModal('${t.id}')">✎</button></td></tr>`; }).join('')+'</tbody></table>';
 }
-function techLinkUrl(id){ let base=location.origin+location.pathname; if(location.protocol==='file:'||!/github\.io/.test(location.host)) base='https://gregoryacfchappert-lab.github.io/PLANNING-CHANTIERS/'; return base+'?tech='+id; }
+function mobBaseUrl(){ let base=location.origin+location.pathname; if(location.protocol==='file:'||!/github\.io/.test(location.host)) base='https://gregoryacfchappert-lab.github.io/PLANNING-CHANTIERS/'; return base; }
+function techLinkUrl(id){ return mobBaseUrl()+'?tech='+id; }
+function copyShareLink(){ const url=mobBaseUrl()+'?mob=1'; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(()=>toast('Lien équipe copié ✔','ok')).catch(()=>prompt('Copiez le lien équipe :',url)); } else { prompt('Copiez le lien équipe :',url); } }
 function copyTechLink(id){ const url=techLinkUrl(id); if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(()=>toast('Lien copié ✔','ok')).catch(()=>prompt('Copiez le lien :',url)); } else { prompt('Copiez le lien :',url); } }
 function moveTech(id,dir){ const i=db.techniciens.findIndex(t=>t.id===id); const j=i+dir; if(i<0||j<0||j>=db.techniciens.length) return; const a=db.techniciens; const tmp=a[i]; a[i]=a[j]; a[j]=tmp; persist(); renderTech(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); }
 let editTechId=null;
@@ -1192,7 +1196,8 @@ function renderMon(){
   sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.map(t=>`<option value="${t.id}" ${t.id===myId?'selected':''}>${esc(t.nom)}</option>`).join('');
   // Mode lien technicien : verrouillage
   const monNav=document.querySelectorAll('#view-mon .mon-nav button'); const fullBtn=monNav.length?monNav[monNav.length-1]:null;
-  if(techLinkMode){ sel.disabled=true; sel.style.opacity='.9'; if(fullBtn) fullBtn.style.display='none'; }
+  if(techLinkMode){ sel.disabled=true; sel.style.opacity='.9'; }
+  if(mobOnly && fullBtn) fullBtn.style.display='none';
   const box=document.getElementById('monBody');
   if(!myId){ box.innerHTML='<div class="empty" style="margin-top:18px">'+(techLinkMode?'Lien non valide. Contactez votre responsable.':'👆 Sélectionnez votre nom en haut pour voir votre planning.')+'</div>'; return; }
   const myRole=(db.techniciens.find(t=>t.id===myId)||{}).role||'';
@@ -1549,7 +1554,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const open=[...do
 document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{ if(e.target===bg) bg.classList.remove('open'); }));
 /* Conserver la position de défilement quand une mise à jour cloud redessine */
 const _rerender0=rerender; rerender=function(){ const y=window.scrollY; _rerender0(); window.scrollTo(0,y); };
-showView(techLinkMode?'mon':'plantech');
+showView(mobOnly?'mon':'plantech');
 setupWheel();
 cloudInit();
 </script>
