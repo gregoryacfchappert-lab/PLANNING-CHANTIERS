@@ -221,6 +221,7 @@
     <button class="ghost small" onclick="weekShift(1)">▶</button>
     <button class="ghost small" onclick="showView('mon')">📱 Mon planning</button>
     <button class="primary small" id="btnGestion" style="display:none" onclick="askAdminAccess()">🔧 Espace gestion</button>
+    <button class="ghost small" id="btnLogoutPT" style="display:none" onclick="doLogout()" title="Se déconnecter">⎋ Déconnexion</button>
   </div>
   <div class="wrap wrap-full"><div id="planTechWrap"></div></div>
 </div>
@@ -658,6 +659,7 @@ function onSignedIn(u){
   document.getElementById('loginBg').style.display='none';
   canEdit = !mobOnly && !!u.email && u.email.toLowerCase()===GESTION_EMAIL;
   const bg=document.getElementById('btnGestion'); if(bg) bg.style.display=canEdit?'inline-flex':'none';
+  const lo=document.getElementById('btnLogoutPT'); if(lo) lo.style.display=(mobOnly||!u.email)?'none':'inline-flex';
   const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=(u.email||'connecté')+(canEdit?'':' · lecture seule'); }
   fbDb.ref('db').once('value').then(snap=>{
     const v=snap.val();
