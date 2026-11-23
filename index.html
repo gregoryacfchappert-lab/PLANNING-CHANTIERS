@@ -123,6 +123,24 @@
   .cfg-month-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .cfg-month-row:hover{background:var(--gris);}
   .ast-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;} .ast-row:hover{background:var(--gris);}
   @media print{ .topnav,.plan-banner,.no-print,.addp{display:none!important;} }
+  /* ===== Mon planning (mobile) ===== */
+  .mon-top{position:sticky;top:0;z-index:60;background:var(--bleu);color:#fff;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+  .mon-brand{font-weight:800;font-size:16px;letter-spacing:.3px;} .mon-brand span{color:#ff9f9a;}
+  #monTechSel{width:100%;padding:11px;border-radius:10px;border:none;font-size:16px;font-weight:700;color:var(--bleu);}
+  .mon-nav{display:flex;gap:6px;align-items:center;} .mon-nav button{background:rgba(255,255,255,.15);color:#fff;border:none;}
+  .mon-body{max-width:620px;margin:0 auto;padding:12px;}
+  .mon-weekh{text-align:center;font-weight:800;color:var(--bleu);margin:4px 0 12px;font-size:16px;}
+  .mon-day{background:#fff;border:1px solid var(--bord);border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .mon-day.today{border-color:var(--bleu);box-shadow:0 0 0 2px var(--bleu-clair);}
+  .mon-dname{background:var(--gris);padding:10px 14px;font-weight:800;color:var(--bleu);text-transform:capitalize;display:flex;justify-content:space-between;align-items:center;}
+  .mon-dname .ferie{color:#64748b;font-weight:700;font-size:13px;}
+  .mon-item{padding:12px 14px;border-top:1px solid var(--bord);border-left:6px solid var(--bleu);}
+  .mon-item:first-child{border-top:none;}
+  .mon-titre{font-weight:800;font-size:17px;color:var(--txt);}
+  .mon-mates{margin-top:5px;font-size:14px;color:var(--bleu);font-weight:600;}
+  .mon-note{margin-top:4px;font-size:13px;color:var(--muted);}
+  .mon-empty{padding:14px;color:var(--muted);text-align:center;font-style:italic;}
+  .mon-ferie-badge{display:inline-block;background:#e2e8f0;color:#334155;border-radius:8px;padding:6px 12px;font-weight:700;margin:6px 14px;}
   /* ===== Ergonomie / lisibilité ===== */
   button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.navlink:focus-visible{outline:2px solid var(--bleu);outline-offset:1px;}
   input:focus,textarea:focus,select:focus{border-color:var(--bleu);box-shadow:0 0 0 3px var(--bleu-clair);outline:none;}
@@ -201,9 +219,26 @@
     <button class="ghost small" onclick="weekShift(-1)">◀</button>
     <button class="ghost small" onclick="weekToday()">Cette semaine</button>
     <button class="ghost small" onclick="weekShift(1)">▶</button>
+    <button class="ghost small" onclick="showView('mon')">📱 Mon planning</button>
     <button class="primary small" onclick="askAdminAccess()">🔒 Espace gestion</button>
   </div>
   <div class="wrap wrap-full"><div id="planTechWrap"></div></div>
+</div>
+
+<!-- VUE MOBILE : MON PLANNING PERSONNEL -->
+<div class="view" id="view-mon">
+  <div class="mon-top">
+    <div class="mon-brand">ACF <span>CHAPPERT</span></div>
+    <select id="monTechSel" onchange="monPickTech()"></select>
+    <div class="mon-nav">
+      <button class="ghost small" onclick="monWeekShift(-1)">◀</button>
+      <button class="ghost small" onclick="monToday()">Cette semaine</button>
+      <button class="ghost small" onclick="monWeekShift(1)">▶</button>
+      <span style="flex:1"></span>
+      <button class="ghost small" onclick="showView('plantech')">🗓 Planning complet</button>
+    </div>
+  </div>
+  <div id="monBody" class="mon-body"></div>
 </div>
 
 <!-- VUE TABLEAU DE BORD -->
@@ -589,7 +624,7 @@ function pushDiff(){ if(!cloudOn||!fbDb) return; const upd={}; CLOUD_KEYS.forEac
 function pushAll(){ if(!fbDb) return; const all={}; CLOUD_KEYS.forEach(k=>{ all[k]=clean(db[k]); _shadow[k]=JSON.stringify(db[k]); }); fbDb.ref('db').set(all).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('err')); }
 function setSyncStatus(s){ const el=document.getElementById('syncDot'); if(!el) return; el.className='sync-dot '+(s||''); el.title = s==='ok'?'Synchronisé':(s==='err'?'Erreur de synchro':'Hors ligne (local)'); }
 let currentView='plantech';
-function rerender(){ const v=currentView; const map={dash:renderDash,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
+function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
@@ -652,10 +687,11 @@ function chDefaultColor(){ return (db.params&&db.params.chColorDefault)||'#1b3a8
 let adminUnlocked=false;
 function showView(v){
   currentView=v;
-  ['plantech','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
-  document.getElementById('topnav').style.display=(v==='plantech')?'none':'flex';
+  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
+  document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
   ['dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
   if(v==='dash') renderDash();
+  if(v==='mon') renderMon();
   if(v==='planning') renderPlanning();
   if(v==='plantech') renderPlanTech();
   if(v==='chantiers') renderChantiers();
@@ -1121,6 +1157,35 @@ function renderPlanning(){
   document.getElementById('planGridWrap').innerHTML=buildGrid(false);
 }
 function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML='<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
+/* ===== Mon planning (mobile) ===== */
+let monWeekStart=mondayOf(new Date());
+function monWeekShift(n){ monWeekStart.setDate(monWeekStart.getDate()+n*7); renderMon(); }
+function monToday(){ monWeekStart=mondayOf(new Date()); renderMon(); }
+function monPickTech(){ const id=document.getElementById('monTechSel').value; try{ localStorage.setItem('acf_montech', id); }catch(e){} renderMon(); }
+function renderMon(){
+  const sel=document.getElementById('monTechSel');
+  let myId=''; try{ myId=localStorage.getItem('acf_montech')||''; }catch(e){}
+  if(myId && !db.techniciens.some(t=>t.id===myId)) myId='';
+  sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.map(t=>`<option value="${t.id}" ${t.id===myId?'selected':''}>${esc(t.nom)}</option>`).join('');
+  const box=document.getElementById('monBody');
+  if(!myId){ box.innerHTML='<div class="empty" style="margin-top:18px">👆 Sélectionnez votre nom en haut pour voir votre planning.</div>'; return; }
+  const wk=isoWeek(monWeekStart); const end=new Date(monWeekStart); end.setDate(end.getDate()+5); const todayStr=ymd(new Date());
+  let html='<div class="mon-weekh">Semaine '+wk+'<br><span style="font-weight:500;color:var(--muted);font-size:13px">du '+monWeekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</span></div>';
+  for(let i=0;i<6;i++){ const d=new Date(monWeekStart); d.setDate(d.getDate()+i); const ds=ymd(d); const ferie=frenchHolidays(d.getFullYear()).has(ds);
+    const ps=posesAt(ds,myId);
+    html+='<div class="mon-day'+(ds===todayStr?' today':'')+'"><div class="mon-dname"><span>'+JOURS[i]+' '+d.toLocaleDateString('fr-FR')+'</span>'+(ferie?'<span class="ferie">Férié</span>':'')+'</div>';
+    if(ferie){ html+='<div class="mon-ferie-badge">Jour férié</div>'; }
+    if(!ps.length && !ferie){ html+='<div class="mon-empty">Rien de prévu</div>'; }
+    ps.forEach(p=>{ const col=poseColor(p); const titre=poseLabel(p);
+      const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
+      let mates=[];
+      if(p.type==='chantier'){ const others=db.poses.filter(x=>x.type==='chantier'&&x.date===ds&&x.techId!==myId&&((p.chantierId&&x.chantierId===p.chantierId)||(!p.chantierId&&(x.label||'')===(p.label||'')))); mates=[...new Set(others.map(x=>techName(x.techId)))].filter(Boolean); }
+      html+='<div class="mon-item" style="border-left-color:'+col+'"><div class="mon-titre">'+esc(titre)+(repas?' 🍽':'')+'</div>'+(mates.length?'<div class="mon-mates">👥 Avec '+mates.map(esc).join(', ')+'</div>':'')+((p.note&&p.type!=='astreinte')?'<div class="mon-note">'+esc(p.note)+'</div>':'')+'</div>';
+    });
+    html+='</div>';
+  }
+  box.innerHTML=html;
+}
 function renderBanner(){
   const box=document.getElementById('chantierBanner'); const si=document.getElementById('searchPlanChantier'); const q=(si&&si.value||'').toLowerCase();
   const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort((a,b)=>(a.mois||'').localeCompare(b.mois||''));
@@ -1438,7 +1503,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const open=[...do
 document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('mousedown',e=>{ if(e.target===bg) bg.classList.remove('open'); }));
 /* Conserver la position de défilement quand une mise à jour cloud redessine */
 const _rerender0=rerender; rerender=function(){ const y=window.scrollY; _rerender0(); window.scrollTo(0,y); };
-showView('plantech');
+showView((()=>{ try{ return localStorage.getItem('acf_montech')?'mon':'plantech'; }catch(e){ return 'plantech'; } })());
 setupWheel();
 cloudInit();
 </script>
