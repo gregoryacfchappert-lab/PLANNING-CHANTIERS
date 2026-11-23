@@ -136,6 +136,9 @@
   .mon-dname .ferie{color:#64748b;font-weight:700;font-size:13px;}
   .mon-item{padding:12px 14px;border-top:1px solid var(--bord);border-left:6px solid var(--bleu);}
   .mon-item:first-child{border-top:none;}
+  .mon-item.tap{cursor:pointer;-webkit-tap-highlight-color:rgba(27,58,140,.1);}
+  .mon-item.tap:active{background:#eef4ff;}
+  .mon-chev{float:right;font-size:12px;font-weight:600;color:var(--bleu);background:var(--bleu-clair);padding:2px 8px;border-radius:20px;}
   .mon-titre{font-weight:800;font-size:17px;color:var(--txt);}
   .mon-mates{margin-top:5px;font-size:14px;color:var(--bleu);font-weight:600;}
   .mon-note{margin-top:4px;font-size:13px;color:var(--muted);}
@@ -1250,7 +1253,8 @@ function renderMon(){
       const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
       let mates=[];
       if(p.type==='chantier'){ const others=db.poses.filter(x=>x.type==='chantier'&&x.date===ds&&x.techId!==myId&&((p.chantierId&&x.chantierId===p.chantierId)||(!p.chantierId&&(x.label||'')===(p.label||'')))); mates=[...new Set(others.map(x=>techName(x.techId)))].filter(Boolean); }
-      html+='<div class="mon-item" style="border-left-color:'+col+'"><div class="mon-titre">'+esc(titre)+(repas?' 🍽':'')+'</div>'+(mates.length?'<div class="mon-mates">👥 Avec '+mates.map(esc).join(', ')+'</div>':'')+((p.note&&p.type!=='astreinte')?'<div class="mon-note">'+esc(p.note)+'</div>':'')+'</div>';
+      const tap=(p.type==='chantier'); const cue=tap?'<span class="mon-chev">Voir la fiche ›</span>':'';
+      html+='<div class="mon-item'+(tap?' tap':'')+'" style="border-left-color:'+col+'"'+(tap?' onclick="openPoseRO(\''+p.id+'\')"':'')+'><div class="mon-titre">'+esc(titre)+(repas?' 🍽':'')+cue+'</div>'+(mates.length?'<div class="mon-mates">👥 Avec '+mates.map(esc).join(', ')+'</div>':'')+((p.note&&p.type!=='astreinte')?'<div class="mon-note">'+esc(p.note)+'</div>':'')+'</div>';
     });
     html+='</div>';
   }
