@@ -1192,6 +1192,8 @@ function wheelWeek(e){ if(Math.abs(e.deltaY)<2) return; e.preventDefault(); cons
 function setupWheel(){ ['planGridWrap','planTechWrap'].forEach(id=>{ const el=document.getElementById(id); if(el&&!el._wheelBound){ el.addEventListener('wheel', wheelWeek, {passive:false}); el._wheelBound=true; } }); }
 function refreshPlanning(){ if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); else renderPlanning(); }
 function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
+function creneauSortKey(p){ if(!p||p.type!=='chantier') return 1; const c=(p.creneau||'').toLowerCase().trim(); if(!c) return 1; if(c.indexOf('matin')>=0) return 0; if(c.indexOf('midi')>=0) return 2.5; const m=c.match(/(\d{1,2})/); if(m){ return parseInt(m[1])<13?0.5:2.5; } return 1.5; }
+function posesOrdered(ds,techId){ return posesAt(ds,techId).slice().sort((a,b)=>creneauSortKey(a)-creneauSortKey(b)); }
 function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
   db.commerciaux.forEach(c=>h+=`<span><i style="background:${esc(c.couleur||'#1b3a8c')}"></i>${esc(c.nom)}</span>`);
   h+=`<span><i style="background:${chDefaultColor()}"></i>Chantier sans commercial</span>`;
@@ -1209,7 +1211,7 @@ function buildWeekTable(wkStart, ro){
   for(let i=0;i<6;i++){ const d=new Date(wkStart); d.setDate(d.getDate()+i); const ds=ymd(d);
     const ferie=frenchHolidays(d.getFullYear()).has(ds);
     html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+(ferie?' · <b style="color:#64748b">Férié</b>':'')+'</div></td>';
-    html+=db.techniciens.map(t=>{ const ps=posesAt(ds,t.id);
+    html+=db.techniciens.map(t=>{ const ps=posesOrdered(ds,t.id);
       if(ferie){ return '<td class="plan-cell plan-ferie"><div class="plan-chip" style="background:#cbd5e1;color:#334155;pointer-events:none"><b>Férié</b></div>'+ps.map(p=>{ const col=poseColor(p); const tc=(p.type==='chantier'?'#111':textOn(col)); const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`; return `<div class="plan-chip" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(poseLabel(p))}</b></div>`; }).join('')+'</td>'; }
       const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
@@ -1261,7 +1263,7 @@ function renderMon(){
   const wk=isoWeek(monWeekStart); const end=new Date(monWeekStart); end.setDate(end.getDate()+5); const todayStr=ymd(new Date());
   let html='<div class="mon-weekh">Semaine '+wk+'<br><span style="font-weight:500;color:var(--muted);font-size:13px">du '+monWeekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</span></div>';
   for(let i=0;i<6;i++){ const d=new Date(monWeekStart); d.setDate(d.getDate()+i); const ds=ymd(d); const ferie=frenchHolidays(d.getFullYear()).has(ds);
-    const ps=posesAt(ds,myId);
+    const ps=posesOrdered(ds,myId);
     html+='<div class="mon-day'+(ds===todayStr?' today':'')+'"><div class="mon-dname"><span>'+JOURS[i]+' '+d.toLocaleDateString('fr-FR')+'</span>'+(ferie?'<span class="ferie">Férié</span>':'')+'</div>';
     if(ferie){ html+='<div class="mon-ferie-badge">Jour férié</div>'; }
     const w=d.getDay(); const ouvre=(w>=1&&w<=5);
