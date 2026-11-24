@@ -139,6 +139,8 @@
   .mon-item.tap{cursor:pointer;-webkit-tap-highlight-color:rgba(27,58,140,.1);}
   .mon-item.tap:active{background:#eef4ff;}
   .mon-chev{float:right;font-size:12px;font-weight:600;color:var(--bleu);background:var(--bleu-clair);padding:2px 8px;border-radius:20px;}
+  .mon-creneau{font-size:13px;font-weight:700;color:#0d4a8c;margin-top:3px;}
+  .cr-badge{display:inline-block;background:rgba(255,255,255,.82);color:#0d2a5c;font-weight:700;font-size:10px;padding:0 5px;border-radius:9px;margin-left:4px;vertical-align:1px;white-space:nowrap;}
   .mon-titre{font-weight:800;font-size:17px;color:var(--txt);}
   .mon-mates{margin-top:5px;font-size:14px;color:var(--bleu);font-weight:600;}
   .mon-note{margin-top:4px;font-size:13px;color:var(--muted);}
@@ -492,6 +494,18 @@
   <div class="modal-actions"><button onclick="sortirNon()">Non</button><button class="primary" onclick="sortirOui()">Oui</button></div>
 </div></div>
 
+<!-- DIALOGUE : créneau horaire (2e chantier+ sur une journée occupée) -->
+<div class="modal-bg" id="creneauBg"><div class="modal" style="max-width:440px">
+  <h3>🕐 Créneau horaire</h3>
+  <div id="creneauMsg" style="margin-bottom:10px;font-size:15px">Indiquez le créneau horaire :</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <button class="small" onclick="applyCreneau('Matin')">🌅 Matin</button>
+    <button class="small" onclick="applyCreneau('Après-midi')">🌇 Après-midi</button>
+  </div>
+  <div class="mfield"><label>Ou saisir un créneau précis</label><input id="creneauInput" placeholder="ex : 8h–12h" onkeyup="if(event.key==='Enter')creneauValider()"></div>
+  <div class="modal-actions"><button onclick="applyCreneau('')">Toute la journée</button><button class="primary" onclick="creneauValider()">Valider</button></div>
+</div></div>
+
 <!-- DIALOGUE : remettre le chantier dans la liste -->
 <div class="modal-bg" id="remettreBg"><div class="modal" style="max-width:420px">
   <h3>Chantier retiré du planning</h3>
@@ -547,6 +561,7 @@
   </div>
   <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
   <div class="mfield" id="taskComRow" style="display:none"><label>Commercial (couleur de la case)</label><select id="taskCom"></select></div>
+  <div class="mfield" id="taskCreneauRow" style="display:none"><label>🕐 Créneau horaire (optionnel — ex : Matin, Après-midi, 8h–12h)</label><input id="taskCreneau" placeholder="Toute la journée si vide"></div>
   <div class="mfield" id="taskRepasRow" style="display:none"><label><input type="checkbox" id="taskRepas" style="margin-right:7px;vertical-align:-1px">🍽 Repas à l'extérieur (affiche le symbole sur la case)</label></div>
   <div class="mfield"><label>Note</label><input id="taskNote"></div>
   <div class="mfield" id="taskAddRow" style="display:none"><label>Ajouter d'autres techniciens à ce chantier (mêmes jours)</label>
@@ -924,11 +939,13 @@ function saveChantier(){
   if(!c.client){ alert('Indiquez le client / chantier.'); return; }
   if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
   else { c.ref=nextRef(); c.statut='previsionnel'; db.chantiers.push(c); }
-  if(c.poseDate){ if(c.techIds&&c.techIds.length){ placeChantierDefinitif(c); } else { alert('Date de pose définie, mais aucun technicien pressenti coché : le chantier n\'a pas été placé automatiquement. Cochez un technicien ou placez-le à la main.'); } }
+  let crIds=[];
+  if(c.poseDate){ if(c.techIds&&c.techIds.length){ crIds=placeChantierDefinitif(c)||[]; } else { alert('Date de pose définie, mais aucun technicien pressenti coché : le chantier n\'a pas été placé automatiquement. Cochez un technicien ou placez-le à la main.'); } }
   persist(); closeChantier(); renderChantiers(); updateBadges();
   if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
   if(document.getElementById('view-prev').classList.contains('active')) renderPrev();
   toast('Chantier enregistré','ok');
+  if(crIds.length) setTimeout(()=>askCreneauFor(crIds),120);
 }
 function deleteChantier(){ if(!editChId) return; if(!confirm('Supprimer ce chantier ?')) return; db.chantiers=db.chantiers.filter(x=>x.id!==editChId); db.poses=db.poses.filter(p=>p.chantierId!==editChId); persist(); closeChantier(); renderChantiers(); updateBadges(); }
 function refNum(c){ const m=(c.ref||'').match(/(\d+)\s*$/); return m?parseInt(m[1]):0; }
@@ -1202,7 +1219,8 @@ function buildWeekTable(wkStart, ro){
         const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
         const drag=(ro||p.type==='astreinte')?'':` draggable="true" ondragstart="event.stopPropagation();poseDragStart(event,'${p.id}')" ondragend="chDragEnd(event)"`;
-        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
+        const cr=(p.type==='chantier'&&p.creneau)?('<span class="cr-badge">🕐 '+esc(p.creneau)+'</span>'):'';
+        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${cr}${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
       }).join('')+defc;
       return ro ? `<td class="plan-cell plan-cell-ro"><div class="cell-fill">${inner}</div></td>` : `<td class="plan-cell" ${cellAttr}>${inner}<span class="addp">＋</span></td>`; }).join('');
     html+='</tr>'; }
@@ -1254,7 +1272,8 @@ function renderMon(){
       let mates=[];
       if(p.type==='chantier'){ const others=db.poses.filter(x=>x.type==='chantier'&&x.date===ds&&x.techId!==myId&&((p.chantierId&&x.chantierId===p.chantierId)||(!p.chantierId&&(x.label||'')===(p.label||'')))); mates=[...new Set(others.map(x=>techName(x.techId)))].filter(Boolean); }
       const tap=(p.type==='chantier'); const cue=tap?'<span class="mon-chev">Voir la fiche ›</span>':'';
-      html+='<div class="mon-item'+(tap?' tap':'')+'" style="border-left-color:'+col+'"'+(tap?' onclick="openPoseRO(\''+p.id+'\')"':'')+'><div class="mon-titre">'+esc(titre)+(repas?' 🍽':'')+cue+'</div>'+(mates.length?'<div class="mon-mates">👥 Avec '+mates.map(esc).join(', ')+'</div>':'')+((p.note&&p.type!=='astreinte')?'<div class="mon-note">'+esc(p.note)+'</div>':'')+'</div>';
+      const crm=(p.type==='chantier'&&p.creneau)?'<div class="mon-creneau">🕐 '+esc(p.creneau)+'</div>':'';
+      html+='<div class="mon-item'+(tap?' tap':'')+'" style="border-left-color:'+col+'"'+(tap?' onclick="openPoseRO(\''+p.id+'\')"':'')+'><div class="mon-titre">'+esc(titre)+(repas?' 🍽':'')+cue+'</div>'+crm+(mates.length?'<div class="mon-mates">👥 Avec '+mates.map(esc).join(', ')+'</div>':'')+((p.note&&p.type!=='astreinte')?'<div class="mon-note">'+esc(p.note)+'</div>':'')+'</div>';
     });
     html+='</div>';
   }
@@ -1289,31 +1308,45 @@ function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDef
 function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
 function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover'); const copy=!!(e.ctrlKey||e.metaKey);
   if(dragPoseId){ if(copy) copyPose(dragPoseId,ds,techId); else movePose(dragPoseId,ds,techId); return; }
-  if(dragChId){ const id=dragChId; placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); return; }
+  if(dragChId){ const id=dragChId; const res=placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id, ()=>{ if(res&&res.needCreneau) askCreneauFor([res.newId]); }),60); return; }
   if(dragType){ placeType(dragType,ds,techId); return; }
-  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')){ if(copy) copyPose(data.slice(5),ds,techId); else movePose(data.slice(5),ds,techId); } else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')){ if(copy) copyPose(data.slice(5),ds,techId); else movePose(data.slice(5),ds,techId); } else if(data.startsWith('CH:')){ const id=data.slice(3); const res=placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id, ()=>{ if(res&&res.needCreneau) askCreneauFor([res.newId]); }),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
 function copyPose(id,ds,techId){ const p=db.poses.find(x=>x.id===id); if(!p){ dragPoseId=null; return; }
   const exists=db.poses.some(x=>x.type===p.type&&x.date===ds&&x.techId===techId&&(p.chantierId?x.chantierId===p.chantierId:(x.label||'')===(p.label||'')));
   if(exists){ dragPoseId=null; toast('Déjà présent sur cette case','ok'); return; }
   const np={id:uid(),type:p.type,techId,date:ds,note:p.note||''};
   if(p.chantierId) np.chantierId=p.chantierId; if(p.label) np.label=p.label; if(p.commercialId) np.commercialId=p.commercialId; if(p.repasExt) np.repasExt=p.repasExt;
   db.poses.push(np); if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch&&ch.statut!=='termine') ch.statut='planifie'; }
-  dragPoseId=null; persist(); renderPlanning(); toast('Tâche copiée (1 jour)','ok'); }
-let sortirChId=null;
-function openSortirDialog(chId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch||ch.horsListe) return; sortirChId=chId; document.getElementById('sortirMsg').textContent='« '+ch.client+' » est planifié. Le sortir de la liste des chantiers à planifier ?'; document.getElementById('sortirBg').classList.add('open'); }
-function sortirOui(){ const ch=db.chantiers.find(c=>c.id===sortirChId); if(ch){ ch.horsListe=true; persist(); } document.getElementById('sortirBg').classList.remove('open'); renderPlanning(); toast('Chantier sorti de la liste','ok'); }
-function sortirNon(){ document.getElementById('sortirBg').classList.remove('open'); }
+  const needCr=(np.type==='chantier')&&hasOtherChantier(ds,techId,np.chantierId,np.label);
+  dragPoseId=null; persist(); renderPlanning(); toast('Tâche copiée (1 jour)','ok'); if(needCr) askCreneauFor([np.id]); }
+/* ===== Créneau horaire (2e chantier+ sur une journée déjà occupée) ===== */
+function hasOtherChantier(ds,techId,exChId,exLabel){ return db.poses.some(p=>p.type==='chantier'&&p.date===ds&&p.techId===techId&&(p.chantierId?p.chantierId!==exChId:(p.label||'')!==(exLabel||''))); }
+let creneauIds=[];
+function askCreneauFor(ids){ ids=(ids||[]).filter(Boolean); if(!ids.length) return; creneauIds=ids;
+  const first=db.poses.find(x=>x.id===ids[0]); const nom=first?poseLabel(first):'ce chantier';
+  document.getElementById('creneauMsg').innerHTML='Ce technicien a déjà un chantier ce jour-là.<br>Indiquez le <b>créneau horaire</b> pour « '+esc(nom)+' »'+(ids.length>1?' ('+ids.length+' jours)':'')+' :';
+  v('creneauInput',''); document.getElementById('creneauBg').classList.add('open'); setTimeout(()=>{const i=document.getElementById('creneauInput'); if(i) i.focus();},60); }
+function applyCreneau(txt){ txt=(txt||'').trim(); creneauIds.forEach(id=>{ const p=db.poses.find(x=>x.id===id); if(p){ if(txt) p.creneau=txt; else delete p.creneau; } }); creneauIds=[]; document.getElementById('creneauBg').classList.remove('open'); persist(); renderPlanning(); if(txt) toast('Créneau « '+txt+' » enregistré','ok'); }
+function creneauValider(){ applyCreneau(val('creneauInput')); }
+let sortirChId=null, sortirThen=null;
+function runSortirThen(){ const t=sortirThen; sortirThen=null; if(t) setTimeout(t,60); }
+function openSortirDialog(chId, then){ sortirThen=then||null; const ch=db.chantiers.find(c=>c.id===chId); if(!ch||ch.horsListe){ runSortirThen(); return; } sortirChId=chId; document.getElementById('sortirMsg').textContent='« '+ch.client+' » est planifié. Le sortir de la liste des chantiers à planifier ?'; document.getElementById('sortirBg').classList.add('open'); }
+function sortirOui(){ const ch=db.chantiers.find(c=>c.id===sortirChId); if(ch){ ch.horsListe=true; persist(); } document.getElementById('sortirBg').classList.remove('open'); renderPlanning(); toast('Chantier sorti de la liste','ok'); runSortirThen(); }
+function sortirNon(){ document.getElementById('sortirBg').classList.remove('open'); runSortirThen(); }
 function movePose(id,ds,techId){ const p=db.poses.find(x=>x.id===id); if(!p) return; if(p.date===ds&&p.techId===techId){ dragPoseId=null; return; }
   // évite un doublon exact sur la case cible
   const dup=db.poses.some(x=>x!==p&&x.type===p.type&&x.date===ds&&x.techId===techId&&(p.chantierId?x.chantierId===p.chantierId:(x.label||'')===(p.label||'')));
-  if(dup){ db.poses=db.poses.filter(x=>x!==p); } else { p.date=ds; p.techId=techId; }
-  dragPoseId=null; persist(); renderPlanning(); toast('Tâche déplacée','ok'); }
+  let needCr=false; if(dup){ db.poses=db.poses.filter(x=>x!==p); } else { p.date=ds; p.techId=techId; needCr=(p.type==='chantier')&&hasOtherChantier(ds,techId,p.chantierId,p.label); }
+  dragPoseId=null; persist(); renderPlanning(); toast('Tâche déplacée','ok'); if(needCr) askCreneauFor([p.id]); }
 function placeType(type,ds,techId){ if(!db.poses.some(p=>p.type===type&&p.techId===techId&&p.date===ds)){ db.poses.push({id:uid(),type,techId,date:ds,note:'',groupId:uid()}); } persist(); renderPlanning(); }
-function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch) return;
+function placeChantier(chId,ds,techId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch) return null;
   // Un seul jour par dépôt : glissez le chantier autant de fois que nécessaire (jours / techniciens)
+  let newId=null, need=false;
   if(!db.poses.some(p=>p.chantierId===chId&&p.techId===techId&&p.date===ds)){
-    db.poses.push({id:uid(),type:'chantier',chantierId:chId,techId,date:ds,note:''}); }
+    need=hasOtherChantier(ds,techId,chId,null);
+    const np={id:uid(),type:'chantier',chantierId:chId,techId,date:ds,note:''}; db.poses.push(np); newId=np.id; }
   ch.statut='planifie'; persist(); renderPlanning(); toast('Chantier placé','ok');
+  return {newId, needCreneau:(need&&!!newId)};
 }
 function workDaysFrom(startStr, n){ const out=[]; let d=new Date(startStr+'T00:00:00'); let g=0; while(out.length<n && g<400){ g++; const w=d.getDay(); if(w>=1&&w<=5 && !frenchHolidays(d.getFullYear()).has(ymd(d))) out.push(ymd(d)); d.setDate(d.getDate()+1); } return out; }
 function placeChantierDefinitif(ch){
@@ -1321,8 +1354,10 @@ function placeChantierDefinitif(ch){
   const crew=ch.techIds.length; const days=Math.max(1, Math.round(chHoursTotal(ch)/(crew*perDayHours())));
   const dates=workDaysFrom(ch.poseDate, days);
   db.poses=db.poses.filter(p=>p.chantierId!==ch.id);
-  ch.techIds.forEach(tid=>{ dates.forEach(ds=>{ db.poses.push({id:uid(),type:'chantier',chantierId:ch.id,techId:tid,date:ds,note:''}); }); });
+  const crIds=[];
+  ch.techIds.forEach(tid=>{ dates.forEach(ds=>{ const need=hasOtherChantier(ds,tid,ch.id,null); const np={id:uid(),type:'chantier',chantierId:ch.id,techId:tid,date:ds,note:''}; db.poses.push(np); if(need) crIds.push(np.id); }); });
   ch.statut='planifie';
+  return crIds;
 }
 function unplaceChantier(id){ if(!confirm('Retirer ce chantier du planning (toutes ses tâches) ?')) return; db.poses=db.poses.filter(p=>p.chantierId!==id); const ch=db.chantiers.find(c=>c.id===id); if(ch&&ch.statut==='planifie') ch.statut='previsionnel'; persist(); renderPlanning(); }
 /* Clic sur une case vide : choisir un chantier (recherche) ou un type */
@@ -1335,12 +1370,12 @@ function openCellPick(ds,techId){ cellCtx={ds,techId};
   document.getElementById('cellPickBg').classList.add('open'); setTimeout(()=>{const s=document.getElementById('cellNewName'); if(s) s.focus();},50); }
 function closeCellPick(){ document.getElementById('cellPickBg').classList.remove('open'); }
 function cellCheckedTechs(){ const ids=[...document.querySelectorAll('#cellTechs .ctk:checked')].map(c=>c.value); return ids.length?ids:(cellCtx?[cellCtx.techId]:[]); }
-function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } techs.forEach(tid=>{ db.poses.push({id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); toast('Chantier libre créé','ok'); }
+function cellCreateFree(){ if(!cellCtx) return; const name=val('cellNewName').trim(); if(!name){ alert('Saisissez le nom du chantier.'); return; } const gid=uid(); const techs=cellCheckedTechs(); if(!techs.length){ alert('Cochez au moins un technicien.'); return; } const crIds=[]; techs.forEach(tid=>{ const need=hasOtherChantier(cellCtx.ds,tid,null,name); const np={id:uid(),type:'chantier',label:name,techId:tid,date:cellCtx.ds,note:'',groupId:gid}; db.poses.push(np); if(need) crIds.push(np.id); }); persist(); renderPlanning(); closeCellPick(); toast('Chantier libre créé','ok'); if(crIds.length) setTimeout(()=>askCreneauFor(crIds),80); }
 function renderCellPick(){ const q=(val('cellSearch')||'').toLowerCase();
   const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort(planCmp).slice(0,80);
   const box=document.getElementById('cellPickList');
   box.innerHTML = list.length? list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id); return `<div class="clic" style="padding:8px 10px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:8px" onclick="cellPickChantier('${c.id}')"><span style="width:11px;height:11px;border-radius:3px;background:${esc(chantierColor(c))};flex:0 0 auto"></span><b>${esc(c.client)}</b><span style="color:var(--muted);font-size:12px;margin-left:auto">${esc(c.ref)} · ${chHoursTotal(c)} h${matTag(c)}${placed?' · ✓ placé':''}</span></div>`; }).join('') : '<div style="padding:14px;color:var(--muted);text-align:center">Aucun chantier trouvé.</div>'; }
-function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:'chantier',chantierId:id,techId:tid,date:cellCtx.ds,note:''}); }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); setTimeout(()=>openSortirDialog(id),60); }
+function cellPickChantier(id){ if(!cellCtx) return; const ch=db.chantiers.find(c=>c.id===id); if(!ch) return; const ds=cellCtx.ds; const crIds=[]; cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.chantierId===id&&p.techId===tid&&p.date===ds)){ const need=hasOtherChantier(ds,tid,id,null); const np={id:uid(),type:'chantier',chantierId:id,techId:tid,date:ds,note:''}; db.poses.push(np); if(need) crIds.push(np.id); } }); ch.statut='planifie'; persist(); renderPlanning(); closeCellPick(); setTimeout(()=>openSortirDialog(id, ()=>{ if(crIds.length) askCreneauFor(crIds); }),60); }
 function cellPickType(k){ if(!cellCtx) return; const gid=uid(); cellCheckedTechs().forEach(tid=>{ if(!db.poses.some(p=>p.type===k&&p.techId===tid&&p.date===cellCtx.ds)) db.poses.push({id:uid(),type:k,techId:tid,date:cellCtx.ds,note:'',groupId:gid}); }); persist(); renderPlanning(); closeCellPick(); }
 function cellPickEvent(){ if(!cellCtx) return; const c=cellCtx; closeCellPick(); openEvent(null,c.ds,c.techId); }
 function finishChantier(id){ const ch=db.chantiers.find(c=>c.id===id); if(ch) ch.statut='termine'; persist(); renderPlanning(); updateBadges(); }
@@ -1353,7 +1388,7 @@ function poseClick(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
 function blockFilter(ctx){ if(ctx.chantierId) return p=>p.type==='chantier'&&p.chantierId===ctx.chantierId&&p.techId===ctx.techId;
   if(ctx.groupId) return p=>p.groupId===ctx.groupId; return p=>p.id===ctx.id; }
 let taskCtx=null;
-function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||'',repasExt:!!p.repasExt};
+function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||'',repasExt:!!p.repasExt,creneau:p.creneau||''};
   const fwd=db.poses.filter(blockFilter(taskCtx)).filter(x=>x.date>=p.date).length;
   document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
   v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
@@ -1363,6 +1398,8 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
   if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
   document.getElementById('taskRepasRow').style.display=(p.type==='chantier')?'block':'none';
   document.getElementById('taskRepas').checked=!!p.repasExt;
+  document.getElementById('taskCreneauRow').style.display=(p.type==='chantier')?'block':'none';
+  v('taskCreneau',p.creneau||'');
   const fb=document.getElementById('taskFicheBtn'); fb.style.display=(p.type==='chantier'&&p.chantierId&&db.chantiers.some(c=>c.id===p.chantierId))?'inline-flex':'none';
   document.getElementById('taskConvertBtn').style.display=(p.type==='autre')?'inline-flex':'none';
   const ar=document.getElementById('taskAddRow');
@@ -1380,8 +1417,8 @@ function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',g
 let taskAddCtx=null;
 function addTechsToChantier(){ if(!taskAddCtx) return; const techs=[...document.querySelectorAll('#taskAddTechs .atk:checked')].map(c=>c.value); if(!techs.length){ alert('Cochez au moins un technicien.'); return; }
   const {chantierId,label,commercialId,dates}=taskAddCtx;
-  techs.forEach(tid=>dates.forEach(ds=>{ const dup=db.poses.some(p=>p.type==='chantier'&&p.techId===tid&&p.date===ds&&(chantierId?p.chantierId===chantierId:(p.label||'')===(label||''))); if(!dup){ const np={id:uid(),type:'chantier',techId:tid,date:ds,note:''}; if(chantierId) np.chantierId=chantierId; else { if(label)np.label=label; if(commercialId)np.commercialId=commercialId; } db.poses.push(np); } }));
-  persist(); closeTask(); renderPlanning(); toast('Technicien(s) ajouté(s) au chantier','ok'); }
+  const crIds=[]; techs.forEach(tid=>dates.forEach(ds=>{ const dup=db.poses.some(p=>p.type==='chantier'&&p.techId===tid&&p.date===ds&&(chantierId?p.chantierId===chantierId:(p.label||'')===(label||''))); if(!dup){ const need=hasOtherChantier(ds,tid,chantierId||null,label||null); const np={id:uid(),type:'chantier',techId:tid,date:ds,note:''}; if(chantierId) np.chantierId=chantierId; else { if(label)np.label=label; if(commercialId)np.commercialId=commercialId; } db.poses.push(np); if(need) crIds.push(np.id); } }));
+  persist(); closeTask(); renderPlanning(); toast('Technicien(s) ajouté(s) au chantier','ok'); if(crIds.length) setTimeout(()=>askCreneauFor(crIds),80); }
 function convertToChantier(){ if(!taskCtx||taskCtx.type!=='autre') return;
   taskCtx.type='chantier'; if(!taskCtx.label) taskCtx.label=(val('taskNote').trim()||'Chantier'); v('taskNote','');
   document.getElementById('taskName').textContent=taskCtx.label+' — Chantier';
@@ -1393,14 +1430,14 @@ function closeTask(){ document.getElementById('taskBg').classList.remove('open')
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
   if(!start||!techId){ alert('Date et technicien requis.'); return; }
   if(ctx.type==='chantier'&&!ctx.chantierId){ ctx.commercialId=val('taskCom')||''; }
-  if(ctx.type==='chantier'){ ctx.repasExt=document.getElementById('taskRepas').checked; }
+  if(ctx.type==='chantier'){ ctx.repasExt=document.getElementById('taskRepas').checked; ctx.creneau=val('taskCreneau').trim(); }
   // retire la partie du bloc à partir de la date cliquée
   db.poses=db.poses.filter(p=>!(blockFilter(ctx)(p)&&p.date>=ctx.date));
   const gid=ctx.chantierId? null : (ctx.groupId||uid());
   let cur=new Date(start+'T00:00:00'), placed=0;
   while(placed<N){ const w=cur.getDay(); if(w>=1&&w<=5){ const d2=ymd(cur); // jours ouvrés : lundi→vendredi (hors week-end)
       const dup=db.poses.some(p=>p.type===ctx.type&&p.date===d2&&p.techId===techId&&(ctx.chantierId?p.chantierId===ctx.chantierId:p.groupId===gid));
-      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } if(ctx.type==='chantier'&&ctx.repasExt) np.repasExt=true; db.poses.push(np); }
+      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } if(ctx.type==='chantier'&&ctx.repasExt) np.repasExt=true; if(ctx.type==='chantier'&&ctx.creneau) np.creneau=ctx.creneau; db.poses.push(np); }
       placed++; }
     cur.setDate(cur.getDate()+1); }
   if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); if(ch) ch.statut='planifie'; }
@@ -1422,6 +1459,7 @@ function openPoseRO(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
   const ch=p.chantierId?db.chantiers.find(c=>c.id===p.chantierId):null;
   document.getElementById('roTitle').textContent='Chantier — '+(ch?ch.client:(p.label||'Chantier'));
   let h='';
+  if(p.creneau) h+='<div style="font-weight:700;color:#0d4a8c">🕐 Créneau : '+esc(p.creneau)+'</div>';
   if(ch){
     if(ch.adresse) h+='<div>📍 '+esc(ch.adresse)+'</div>';
     if(ch.tel) h+='<div>📞 <a href="tel:'+esc(ch.tel)+'">'+esc(ch.tel)+'</a></div>';
