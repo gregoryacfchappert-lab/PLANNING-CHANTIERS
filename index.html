@@ -109,8 +109,8 @@
   .plan-chip.has-repas{padding-right:22px;} .repas-badge{position:absolute;top:2px;right:3px;font-size:14px;line-height:1;filter:drop-shadow(0 0 1px rgba(255,255,255,.9));}
   /* Vue technicien : chantier occupe toute la case, divisée si plusieurs */
   td.plan-cell-ro{height:82px;padding:3px;}
-  .plan-cell-ro .cell-fill{display:flex;flex-direction:column;gap:3px;height:100%;}
-  .plan-cell-ro .cell-fill .plan-chip{flex:1 1 0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:15px;min-height:0;}
+  .plan-cell-ro .cell-fill{display:flex;flex-direction:column;gap:3px;min-height:76px;height:100%;}
+  .plan-cell-ro .cell-fill .plan-chip{flex:1 0 auto;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:15px;min-height:34px;padding:4px 6px;}
   .plan-cell-ro .cell-fill .plan-chip b{display:block;}
   .plan-chip.plan-default{opacity:.55;pointer-events:none;border:1px dashed rgba(255,255,255,.7);}
   .plan-cell.plan-ferie{background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 6px,#e2e8f0 6px,#e2e8f0 12px);}
@@ -226,6 +226,7 @@
     <button class="ghost small" onclick="weekToday()">Cette semaine</button>
     <button class="ghost small" onclick="weekShift(1)">▶</button>
     <button class="ghost small" onclick="showView('mon')">📱 Mon planning</button>
+    <button class="ghost small" onclick="openQR()">🔳 QR code mobile</button>
     <button class="primary small" id="btnGestion" style="display:none" onclick="askAdminAccess()">🔧 Espace gestion</button>
     <button class="ghost small" id="btnLogoutPT" style="display:none" onclick="doLogout()" title="Se déconnecter">⎋ Déconnexion</button>
   </div>
@@ -244,7 +245,10 @@
       <span style="flex:1"></span>
       <button class="ghost small" onclick="showView('plantech')">🗓 Planning complet</button>
     </div>
-    <button id="monFicheBtn" class="primary small" style="width:100%;margin-top:8px" onclick="openFicheMob()">📝 Ma fiche de la semaine</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="monFicheBtn" class="primary small" style="flex:1" onclick="openFicheMob()">📝 Ma fiche de la semaine</button>
+      <button class="ghost small" style="flex:0 0 auto;background:#fff" onclick="openMesFiches()">📂 Mes fiches</button>
+    </div>
   </div>
   <div id="monBody" class="mon-body"></div>
 </div>
@@ -537,6 +541,22 @@
   <div class="modal-actions"><button onclick="clearSign()">↺ Effacer</button><button onclick="closeSign()">Annuler</button><button class="primary" onclick="validateSign()">✔ Valider et enregistrer</button></div>
 </div></div>
 
+<!-- MODAL : QR code accès mobile -->
+<div class="modal-bg" id="qrBg"><div class="modal" style="max-width:360px;text-align:center">
+  <h3>🔳 Accès planning mobile</h3>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Les techniciens scannent ce QR code pour ouvrir leur planning sur leur téléphone (ils choisissent leur nom).</div>
+  <div id="qrBox" style="display:flex;justify-content:center;padding:10px"></div>
+  <div id="qrLink" style="font-size:11px;color:var(--bleu);word-break:break-all;margin-top:6px"></div>
+  <div class="modal-actions"><button onclick="copyShareLink()">🔗 Copier le lien</button><button class="primary" onclick="closeQR()">Fermer</button></div>
+</div></div>
+
+<!-- MODAL : mes fiches (consultation technicien) -->
+<div class="modal-bg" id="mesFichesBg"><div class="modal" style="max-width:480px">
+  <h3>📂 Mes fiches enregistrées</h3>
+  <div id="mesFichesBody" style="font-size:14px"></div>
+  <div class="modal-actions"><button class="primary" onclick="closeMesFiches()">Fermer</button></div>
+</div></div>
+
 <!-- DIALOGUE : remettre le chantier dans la liste -->
 <div class="modal-bg" id="remettreBg"><div class="modal" style="max-width:420px">
   <h3>Chantier retiré du planning</h3>
@@ -643,6 +663,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1286,6 +1307,21 @@ function validateSign(){ if(!signTargetFiche) return; const c=document.getElemen
   if(!c._has){ if(!confirm('Aucune signature dessinée. Enregistrer la fiche sans signature ?')) return; signTargetFiche.signature=''; }
   else { signTargetFiche.signature=c.toDataURL('image/png'); }
   const techId=ficheCtx.techId; saveFiche(techId, signTargetFiche); closeSign(); closeFiche(); toast('Fiche signée et enregistrée ✔','ok'); if(document.getElementById('view-fiches').classList.contains('active')) renderFiches(); }
+/* ===== QR code accès mobile ===== */
+function openQR(){ const url=mobBaseUrl()+'?mob=1'; const box=document.getElementById('qrBox'); box.innerHTML=''; document.getElementById('qrLink').textContent=url;
+  if(window.QRCode){ try{ new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ box.innerHTML='<div style="color:var(--rouge);font-size:12px">QR indisponible.</div>'; } }
+  else box.innerHTML='<div style="color:var(--muted);font-size:12px">Librairie QR non chargée (connexion internet requise).</div>';
+  document.getElementById('qrBg').classList.add('open'); }
+function closeQR(){ document.getElementById('qrBg').classList.remove('open'); }
+/* ===== Mes fiches (consultation technicien) ===== */
+function openMesFiches(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionnez d\'abord votre nom en haut.'); return; }
+  const wk=(db.fiches&&db.fiches[myId])||{}; const keys=Object.keys(wk).sort().reverse(); let h;
+  if(!keys.length){ h='<div style="color:var(--muted);padding:10px 0">Aucune fiche enregistrée pour l\'instant. Remplissez « Ma fiche de la semaine ».</div>'; }
+  else { h='<div style="display:flex;flex-direction:column;gap:8px">'+keys.map(ws=>{ const f=wk[ws]; const mon=new Date(ws+'T00:00:00'); const rep=ficheWeekRepas(f); const sup=ficheWeekSupp(f); const sig=f.signature?'✅ signée':'⚠ non signée';
+    return '<button class="small" style="text-align:left;padding:10px;width:100%" onclick="openFicheFromList(\''+myId+'\',\''+ws+'\')"><b>Semaine du '+mon.toLocaleDateString('fr-FR')+'</b><br><span style="font-size:12px;color:var(--muted)">'+rep+' repas · '+sup+' h supp'+(f.astreinte?' · astreinte '+(f.sortie||0)+'h':'')+' · '+sig+'</span></button>'; }).join('')+'</div>'; }
+  document.getElementById('mesFichesBody').innerHTML=h; document.getElementById('mesFichesBg').classList.add('open'); }
+function closeMesFiches(){ document.getElementById('mesFichesBg').classList.remove('open'); }
+function openFicheFromList(techId, ws){ closeMesFiches(); monWeekStart=mondayOf(new Date(ws+'T00:00:00')); renderMon(); openFiche(techId, ws); }
 /* ===== Gestion : onglet Fiches techniciens ===== */
 function monthsWithFiches(){ const set=new Set(); Object.values(db.fiches||{}).forEach(wk=>Object.values(wk||{}).forEach(f=>{ if(f&&f.days) Object.keys(f.days).forEach(ds=>set.add(ds.slice(0,7))); if(f&&f.weekStart){ const sat=new Date(f.weekStart+'T00:00:00'); sat.setDate(sat.getDate()+5); set.add(monthKey(sat)); set.add(f.weekStart.slice(0,7)); } })); set.add(monthKey(new Date())); return [...set].sort().reverse(); }
 function shortWk(ws){ const d=new Date(ws+'T00:00:00'); return 'S'+isoWeek(d)+' du '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
