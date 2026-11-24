@@ -1283,15 +1283,22 @@ function chDragStart(e,id){ dragChId=id; dragType=null; dragPoseId=null; e.dataT
   e.currentTarget.classList.add('dragging'); }
 function typeDragStart(e,t){ dragType=t; dragChId=null; dragPoseId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','TYPE:'+t);}catch(_){}
   e.currentTarget.classList.add('dragging'); }
-function poseDragStart(e,id){ dragPoseId=id; dragChId=null; dragType=null; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain','POSE:'+id);}catch(_){} e.currentTarget.classList.add('dragging'); }
+function poseDragStart(e,id){ dragPoseId=id; dragChId=null; dragType=null; e.dataTransfer.effectAllowed='copyMove'; try{e.dataTransfer.setData('text/plain','POSE:'+id);}catch(_){} e.currentTarget.classList.add('dragging'); }
 function chDragEnd(e){ e.currentTarget.classList.remove('dragging'); dragChId=null; dragType=null; dragPoseId=null; }
-function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDefault(); e.currentTarget.classList.add('drop-hover'); }
+function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDefault(); if(dragPoseId&&e.dataTransfer){ try{ e.dataTransfer.dropEffect=(e.ctrlKey||e.metaKey)?'copy':'move'; }catch(_){} } e.currentTarget.classList.add('drop-hover'); }
 function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
-function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover');
-  if(dragPoseId){ movePose(dragPoseId,ds,techId); return; }
+function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover'); const copy=!!(e.ctrlKey||e.metaKey);
+  if(dragPoseId){ if(copy) copyPose(dragPoseId,ds,techId); else movePose(dragPoseId,ds,techId); return; }
   if(dragChId){ const id=dragChId; placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); return; }
   if(dragType){ placeType(dragType,ds,techId); return; }
-  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')) movePose(data.slice(5),ds,techId); else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')){ if(copy) copyPose(data.slice(5),ds,techId); else movePose(data.slice(5),ds,techId); } else if(data.startsWith('CH:')){ const id=data.slice(3); placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+function copyPose(id,ds,techId){ const p=db.poses.find(x=>x.id===id); if(!p){ dragPoseId=null; return; }
+  const exists=db.poses.some(x=>x.type===p.type&&x.date===ds&&x.techId===techId&&(p.chantierId?x.chantierId===p.chantierId:(x.label||'')===(p.label||'')));
+  if(exists){ dragPoseId=null; toast('Déjà présent sur cette case','ok'); return; }
+  const np={id:uid(),type:p.type,techId,date:ds,note:p.note||''};
+  if(p.chantierId) np.chantierId=p.chantierId; if(p.label) np.label=p.label; if(p.commercialId) np.commercialId=p.commercialId; if(p.repasExt) np.repasExt=p.repasExt;
+  db.poses.push(np); if(p.chantierId){ const ch=db.chantiers.find(c=>c.id===p.chantierId); if(ch&&ch.statut!=='termine') ch.statut='planifie'; }
+  dragPoseId=null; persist(); renderPlanning(); toast('Tâche copiée (1 jour)','ok'); }
 let sortirChId=null;
 function openSortirDialog(chId){ const ch=db.chantiers.find(c=>c.id===chId); if(!ch||ch.horsListe) return; sortirChId=chId; document.getElementById('sortirMsg').textContent='« '+ch.client+' » est planifié. Le sortir de la liste des chantiers à planifier ?'; document.getElementById('sortirBg').classList.add('open'); }
 function sortirOui(){ const ch=db.chantiers.find(c=>c.id===sortirChId); if(ch){ ch.horsListe=true; persist(); } document.getElementById('sortirBg').classList.remove('open'); renderPlanning(); toast('Chantier sorti de la liste','ok'); }
