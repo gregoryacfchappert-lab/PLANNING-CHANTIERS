@@ -209,6 +209,7 @@
   <button class="navlink" id="nav-propo" onclick="showView('propo')">💡 Proposition</button>
   <button class="navlink" id="nav-tech" onclick="showView('tech')">👷 Techniciens</button>
   <button class="navlink" id="nav-com" onclick="showView('com')">🧑‍💼 Commerciaux</button>
+  <button class="navlink" id="nav-fiches" onclick="showView('fiches')">🧾 Fiches techniciens</button>
   <button class="navlink" id="nav-params" onclick="showView('params')">⚙ Paramètres</button>
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
@@ -243,6 +244,7 @@
       <span style="flex:1"></span>
       <button class="ghost small" onclick="showView('plantech')">🗓 Planning complet</button>
     </div>
+    <button id="monFicheBtn" class="primary small" style="width:100%;margin-top:8px" onclick="openFicheMob()">📝 Ma fiche de la semaine</button>
   </div>
   <div id="monBody" class="mon-body"></div>
 </div>
@@ -367,6 +369,20 @@
       <button class="primary" onclick="openComModal()">＋ Nouveau commercial</button>
     </div>
     <div id="comTableWrap"></div>
+  </div>
+</div>
+
+<!-- VUE FICHES TECHNICIENS (gestion) -->
+<div class="view" id="view-fiches">
+  <div class="wrap wrap-full">
+    <h2 class="page-h">Fiches techniciens</h2>
+    <p class="sub">Récap hebdomadaire saisi par chaque technicien (repas extérieur, heures supp, astreinte du samedi) pour préparer les variables de paie.</p>
+    <div class="bar" style="align-items:flex-end">
+      <div class="mfield" style="flex:0 0 200px;margin:0"><label style="font-size:12px;color:var(--muted)">Mois</label><select id="fichesMonth" onchange="renderFiches()"></select></div>
+      <button class="primary" onclick="exportFichesZip()">📦 Exporter le mois (ZIP : Excel + PDF)</button>
+      <span id="fichesExportMsg" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="fichesWrap"></div>
   </div>
 </div>
 
@@ -506,6 +522,13 @@
   <div class="modal-actions"><button onclick="applyCreneau('')">Toute la journée</button><button class="primary" onclick="creneauValider()">Valider</button></div>
 </div></div>
 
+<!-- MODAL : fiche hebdo technicien (saisie mobile + édition gestion) -->
+<div class="modal-bg" id="ficheBg"><div class="modal" style="max-width:560px">
+  <h3 id="ficheTitle">Ma fiche de la semaine</h3>
+  <div id="ficheBody" style="font-size:14px"></div>
+  <div class="modal-actions"><button onclick="closeFiche()">Fermer</button><button class="primary" onclick="saveFicheForm()">💾 Enregistrer la fiche</button></div>
+</div></div>
+
 <!-- DIALOGUE : remettre le chantier dans la liste -->
 <div class="modal-bg" id="remettreBg"><div class="modal" style="max-width:420px">
   <h3>Chantier retiré du planning</h3>
@@ -611,6 +634,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ===== Configuration Firebase (clés publiques, synchro multi-postes) ===== */
 const FB_CONFIG={
@@ -642,6 +668,7 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.c
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
   d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.hVendredi==null)d.params.hVendredi=7; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
   if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
+  if(!d.fiches||typeof d.fiches!=='object') d.fiches={};
   d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien='';
     if(c.matEtat==null){ c.matEtat = c.matRecu ? 'recu' : ((c.materiel==='oui')?'cmd':'non'); }
     if(c.matRecep==null) c.matRecep = c.matRecu || '';
@@ -649,12 +676,12 @@ function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||
 function persistLocal(){ try{ localStorage.setItem(DBKEY, JSON.stringify(db)); }catch(e){} }
 function persist(){ persistLocal(); if(cloudOn) schedulePush(); }
 /* ===== Synchro cloud (Firebase Realtime Database) ===== */
-const CLOUD_KEYS=['techniciens','commerciaux','chantiers','poses','astreinteOrder','params','seq','logo'];
+const CLOUD_KEYS=['techniciens','commerciaux','chantiers','poses','astreinteOrder','params','seq','logo','fiches'];
 const LIST_KEYS=['techniciens','commerciaux','chantiers','poses','astreinteOrder'];
 let fbAuth=null, fbDb=null, cloudOn=false, _pushTimer=null; const _shadow={};
-function cloudDefault(k){ if(LIST_KEYS.includes(k)) return []; if(k==='params') return {}; if(k==='seq') return 0; if(k==='logo') return DEFAULT_LOGO; return null; }
+function cloudDefault(k){ if(LIST_KEYS.includes(k)) return []; if(k==='params') return {}; if(k==='seq') return 0; if(k==='logo') return DEFAULT_LOGO; if(k==='fiches') return {}; return null; }
 function coerceList(v){ if(v==null) return []; return Array.isArray(v)? v.filter(x=>x!=null) : Object.values(v); }
-function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; return d; }
+function fromCloud(v){ const d=Object.assign({}, v||{}); LIST_KEYS.forEach(k=>{ d[k]=coerceList(d[k]); }); d.params=d.params||{}; if(d.seq==null)d.seq=0; if(!d.logo)d.logo=DEFAULT_LOGO; if(!d.fiches||typeof d.fiches!=='object')d.fiches={}; return d; }
 function clean(x){ return JSON.parse(JSON.stringify(x===undefined?null:x)); }
 function schedulePush(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(pushDiff, 600); }
 function pushDiff(){ if(!cloudOn||!fbDb||mobOnly||!canEdit) return; const upd={}; CLOUD_KEYS.forEach(k=>{ const js=JSON.stringify(db[k]); if(js!==_shadow[k]){ upd[k]=clean(db[k]); _shadow[k]=js; } }); if(Object.keys(upd).length){ fbDb.ref('db').update(upd).catch(e=>setSyncStatus('err')); setSyncStatus('ok'); } }
@@ -665,7 +692,7 @@ const _urlTech=(new URLSearchParams(location.search)).get('tech');
 const techLinkMode=!!_urlTech;
 const techShareMode=!techLinkMode && !!(new URLSearchParams(location.search)).get('mob');
 const mobOnly=techLinkMode||techShareMode;
-function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
+function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,fiches:renderFiches,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
@@ -735,9 +762,9 @@ let adminUnlocked=false;
 function showView(v){
   if(mobOnly) v='mon';
   currentView=v;
-  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
+  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','fiches','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
   document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
-  ['dash','planning','chantiers','prev','propo','tech','com','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
+  ['dash','planning','chantiers','prev','propo','tech','com','fiches','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
   if(v==='dash') renderDash();
   if(v==='mon') renderMon();
   if(v==='planning') renderPlanning();
@@ -747,6 +774,7 @@ function showView(v){
   if(v==='propo') renderPropo();
   if(v==='tech') renderTech();
   if(v==='com') renderCom();
+  if(v==='fiches') renderFiches();
   if(v==='params') renderParams();
   updateBadges(); window.scrollTo(0,0);
 }
@@ -1194,6 +1222,83 @@ function refreshPlanning(){ if(document.getElementById('view-plantech').classLis
 function posesAt(ds,techId){ return db.poses.filter(p=>p.date===ds&&p.techId===techId); }
 function creneauSortKey(p){ if(!p||p.type!=='chantier') return 1; const c=(p.creneau||'').toLowerCase().trim(); if(!c) return 1; if(c.indexOf('matin')>=0) return 0; if(c.indexOf('midi')>=0) return 2.5; const m=c.match(/(\d{1,2})/); if(m){ return parseInt(m[1])<13?0.5:2.5; } return 1.5; }
 function posesOrdered(ds,techId){ return posesAt(ds,techId).slice().sort((a,b)=>creneauSortKey(a)-creneauSortKey(b)); }
+/* ===== Fiches hebdo technicien ===== */
+function getFiche(techId, wkKey){ return (db.fiches && db.fiches[techId] && db.fiches[techId][wkKey]) || null; }
+function blankFiche(wkStart){ return {weekStart:wkStart, days:{}, astreinte:false, sortie:0, updatedAt:0}; }
+function chantiersOfDay(ds,techId){ return posesOrdered(ds,techId).filter(p=>p.type==='chantier').map(p=>poseLabel(p)+(p.creneau?' ('+p.creneau+')':'')); }
+function ficheWeekSupp(f){ let s=0; if(f&&f.days) Object.values(f.days).forEach(d=>{ s+=parseFloat(d.supp)||0; }); return Math.round(s*100)/100; }
+function ficheWeekRepas(f){ let n=0; if(f&&f.days) Object.values(f.days).forEach(d=>{ if(d.repas) n++; }); return n; }
+function saveFiche(techId, fiche){ fiche.updatedAt=Date.now(); db.fiches=db.fiches||{}; db.fiches[techId]=db.fiches[techId]||{}; db.fiches[techId][fiche.weekStart]=fiche;
+  if(canEdit){ persist(); }
+  else { persistLocal(); if(fbDb){ try{ fbDb.ref('db/fiches/'+techId+'/'+fiche.weekStart).set(clean(fiche)); _shadow['fiches']=JSON.stringify(db.fiches); }catch(e){} } } }
+let ficheCtx=null;
+function ficheMyId(){ if(techLinkMode) return _urlTech; try{ return localStorage.getItem('acf_montech')||''; }catch(e){ return ''; } }
+function openFicheMob(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionnez d\'abord votre nom en haut.'); return; } openFiche(myId, ymd(monWeekStart)); }
+function openFiche(techId, weekStart){ ficheCtx={techId, weekStart}; buildFicheForm(); document.getElementById('ficheBg').classList.add('open'); }
+function closeFiche(){ document.getElementById('ficheBg').classList.remove('open'); }
+function buildFicheForm(){ const {techId, weekStart}=ficheCtx; const t=db.techniciens.find(x=>x.id===techId)||{}; const isAstr=!!t.astreinte;
+  const mon=new Date(weekStart+'T00:00:00'); const f=getFiche(techId,weekStart)||blankFiche(weekStart);
+  document.getElementById('ficheTitle').textContent='Fiche — '+(t.nom||'')+' — semaine du '+mon.toLocaleDateString('fr-FR');
+  let h='<div style="color:var(--muted);font-size:12px;margin-bottom:8px">Cochez les repas pris à l\'extérieur et indiquez vos heures supplémentaires par jour.</div>';
+  h+='<table class="grid" style="font-size:13px"><thead><tr><th>Jour</th><th>Chantier(s)</th><th>Repas ext.</th><th>H. supp</th></tr></thead><tbody>';
+  for(let i=0;i<6;i++){ const d=new Date(mon); d.setDate(d.getDate()+i); const ds=ymd(d); const day=(f.days&&f.days[ds])||{}; const chs=chantiersOfDay(ds,techId);
+    h+='<tr><td><b>'+JOURS[i]+'</b><br><span style="color:var(--muted);font-size:11px">'+d.toLocaleDateString('fr-FR')+'</span></td>'+
+       '<td style="font-size:12px">'+(chs.length?chs.map(esc).join('<br>'):'<span style="color:var(--muted)">—</span>')+'</td>'+
+       '<td style="text-align:center"><input type="checkbox" class="fiche-repas" data-ds="'+ds+'" '+(day.repas?'checked':'')+' style="width:20px;height:20px"></td>'+
+       '<td><input type="number" class="fiche-supp" data-ds="'+ds+'" min="0" step="0.5" value="'+(day.supp!=null&&day.supp!==''?day.supp:'')+'" placeholder="0" style="width:64px;padding:5px;border:1px solid var(--bord);border-radius:6px" oninput="ficheRecalc()"></td></tr>';
+  }
+  h+='</tbody></table><div id="ficheSuppTotal" style="text-align:right;font-weight:700;margin-top:6px;color:var(--bleu)"></div>';
+  if(isAstr){ const sd=new Date(mon); sd.setDate(sd.getDate()+5);
+    h+='<div style="margin-top:12px;padding:10px;border:1px solid var(--bord);border-radius:10px;background:#faf7ff">'+
+       '<label style="font-weight:700"><input type="checkbox" id="ficheAstr" '+(f.astreinte?'checked':'')+' style="margin-right:8px;vertical-align:-2px">Astreinte ce samedi ('+sd.toLocaleDateString('fr-FR')+')</label>'+
+       '<div class="mfield" style="margin-top:8px"><label>Heures de sortie astreinte (total samedi)</label><input id="ficheSortie" type="number" min="0" step="0.5" value="'+(f.sortie!=null&&f.sortie!==''?f.sortie:'')+'" placeholder="0" style="width:120px"></div></div>'; }
+  else { h+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">Astreinte : non concerné (hors boucle d\'astreinte).</div>'; }
+  document.getElementById('ficheBody').innerHTML=h; ficheRecalc();
+}
+function ficheRecalc(){ let s=0; document.querySelectorAll('#ficheBody .fiche-supp').forEach(i=>{ s+=parseFloat(i.value)||0; }); const el=document.getElementById('ficheSuppTotal'); if(el) el.textContent='Total heures supp semaine : '+(Math.round(s*100)/100)+' h'; }
+function saveFicheForm(){ if(!ficheCtx) return; const {techId, weekStart}=ficheCtx; const f=getFiche(techId,weekStart)||blankFiche(weekStart); f.days={};
+  document.querySelectorAll('#ficheBody .fiche-supp').forEach(i=>{ const ds=i.getAttribute('data-ds'); const supp=parseFloat(i.value)||0; const rep=document.querySelector('#ficheBody .fiche-repas[data-ds="'+ds+'"]'); const repas=!!(rep&&rep.checked); if(supp||repas){ f.days[ds]={repas:repas, supp:supp}; } });
+  const astrEl=document.getElementById('ficheAstr'); f.astreinte=astrEl?!!astrEl.checked:false; const sortieEl=document.getElementById('ficheSortie'); f.sortie=sortieEl?(parseFloat(sortieEl.value)||0):0;
+  saveFiche(techId,f); closeFiche(); toast('Fiche enregistrée ✔','ok'); if(document.getElementById('view-fiches').classList.contains('active')) renderFiches(); }
+/* ===== Gestion : onglet Fiches techniciens ===== */
+function monthsWithFiches(){ const set=new Set(); Object.values(db.fiches||{}).forEach(wk=>Object.values(wk||{}).forEach(f=>{ if(f&&f.days) Object.keys(f.days).forEach(ds=>set.add(ds.slice(0,7))); if(f&&f.weekStart){ const sat=new Date(f.weekStart+'T00:00:00'); sat.setDate(sat.getDate()+5); set.add(monthKey(sat)); set.add(f.weekStart.slice(0,7)); } })); set.add(monthKey(new Date())); return [...set].sort().reverse(); }
+function shortWk(ws){ const d=new Date(ws+'T00:00:00'); return 'S'+isoWeek(d)+' du '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
+function ficheMonthAgg(techId, month){ const wk=(db.fiches&&db.fiches[techId])||{}; let repas=0,supp=0,astrWeeks=0,sortie=0; const weeks=[]; Object.keys(wk).sort().forEach(ws=>{ const f=wk[ws]; let used=false; if(f&&f.days){ Object.keys(f.days).forEach(ds=>{ if(ds.slice(0,7)===month){ used=true; if(f.days[ds].repas) repas++; supp+=parseFloat(f.days[ds].supp)||0; } }); } const sat=new Date(ws+'T00:00:00'); sat.setDate(sat.getDate()+5); if(monthKey(sat)===month){ if(f&&f.astreinte){ astrWeeks++; used=true; } if(f&&f.sortie){ sortie+=parseFloat(f.sortie)||0; used=true; } } if(used) weeks.push(ws); }); return {repas, supp:Math.round(supp*100)/100, astrWeeks, sortie:Math.round(sortie*100)/100, weeks}; }
+function renderFiches(){ const sel=document.getElementById('fichesMonth'); if(!sel) return; const months=monthsWithFiches(); const curVal=sel.value||monthKey(new Date()); sel.innerHTML=months.map(m=>'<option value="'+m+'"'+(m===curVal?' selected':'')+'>'+esc(capFirst(monthLabel(m)))+'</option>').join(''); const month=sel.value||curVal;
+  const rows=db.techniciens.map(t=>Object.assign({t}, ficheMonthAgg(t.id,month)));
+  const any=rows.some(r=>r.weeks.length);
+  let html='<table class="grid"><thead><tr><th>Technicien</th><th>Repas ext.</th><th>Heures supp</th><th>Astreinte (samedis)</th><th>H. sortie</th><th>Semaines (cliquer pour éditer)</th></tr></thead><tbody>';
+  rows.forEach(r=>{ html+='<tr><td><b>'+esc(r.t.nom)+'</b></td><td style="text-align:center">'+r.repas+'</td><td style="text-align:center">'+r.supp+' h</td><td style="text-align:center">'+(r.astrWeeks||'—')+'</td><td style="text-align:center">'+(r.sortie||0)+' h</td><td>'+(r.weeks.length?r.weeks.map(w=>'<button class="small" onclick="openFiche(\''+r.t.id+'\',\''+w+'\')">'+shortWk(w)+'</button>').join(' '):'<button class="small ghost" onclick="openFiche(\''+r.t.id+'\',\''+ficheMonthFirstMonday(month)+'\')">+ saisir</button>')+'</td></tr>'; });
+  html+='</tbody></table>';
+  if(!any) html+='<div style="color:var(--muted);font-size:13px;margin-top:10px">Aucune fiche saisie pour ce mois pour l\'instant. Les techniciens remplissent leur fiche depuis la version mobile ; vous pouvez aussi saisir/éditer ici via « + saisir ».</div>';
+  document.getElementById('fichesWrap').innerHTML=html;
+}
+function ficheMonthFirstMonday(month){ const p=month.split('-'); const d=new Date(parseInt(p[0]),parseInt(p[1])-1,1); return ymd(mondayOf(d)); }
+function techFicheRows(techId, month){ const wk=(db.fiches&&db.fiches[techId])||{}; const days=[]; let suppTot=0, repasTot=0, sortieTot=0, astrWeeks=0;
+  Object.keys(wk).sort().forEach(ws=>{ const f=wk[ws]; if(f&&f.days){ Object.keys(f.days).forEach(ds=>{ if(ds.slice(0,7)===month){ const d=f.days[ds]; const supp=parseFloat(d.supp)||0; suppTot+=supp; if(d.repas) repasTot++; days.push({ds, chantiers:chantiersOfDay(ds,techId).join(' + '), repas:d.repas?'Oui':'', supp}); } }); }
+    const sat=new Date(ws+'T00:00:00'); sat.setDate(sat.getDate()+5); if(monthKey(sat)===month){ if(f&&f.astreinte) astrWeeks++; if(f&&f.sortie) sortieTot+=parseFloat(f.sortie)||0; } });
+  days.sort((a,b)=>a.ds<b.ds?-1:1); return {days, suppTot:Math.round(suppTot*100)/100, repasTot, sortieTot:Math.round(sortieTot*100)/100, astrWeeks}; }
+async function buildFichesZipBlob(month){ if(!window.JSZip||!window.XLSX||!(window.jspdf&&window.jspdf.jsPDF)) throw new Error('Librairies non chargées');
+  const zip=new JSZip(); const monthLbl=capFirst(monthLabel(month));
+  const recap=[['Technicien','Repas ext (nb)','Heures supp','Astreinte (samedis)','Heures sortie astreinte']];
+  const detail=[['Technicien','Date','Jour','Chantier(s)','Repas ext','Heures supp']];
+  db.techniciens.forEach(t=>{ const r=techFicheRows(t.id,month); recap.push([t.nom, r.repasTot, r.suppTot, r.astrWeeks, r.sortieTot]);
+    r.days.forEach(d=>{ const dd=new Date(d.ds+'T00:00:00'); detail.push([t.nom, dd.toLocaleDateString('fr-FR'), JOURS[(dd.getDay()+6)%7], d.chantiers, d.repas, d.supp]); }); });
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recap), 'Récap mensuel'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), 'Détail');
+  zip.file('RECAP_'+month+'.xlsx', XLSX.write(wb,{bookType:'xlsx',type:'array'}));
+  const { jsPDF }=window.jspdf;
+  db.techniciens.forEach(t=>{ const r=techFicheRows(t.id,month); if(!r.days.length && !r.astrWeeks && !r.sortieTot && !r.repasTot) return;
+    const doc=new jsPDF(); let y=16; doc.setFontSize(14); doc.text('Fiche technicien — '+t.nom, 14, y); y+=7; doc.setFontSize(11); doc.text('Mois : '+monthLbl, 14, y); y+=9;
+    doc.setFontSize(9); doc.text('Jour',14,y); doc.text('Chantier(s)',52,y); doc.text('Repas',150,y); doc.text('H.supp',176,y); y+=2; doc.line(14,y,196,y); y+=5;
+    r.days.forEach(d=>{ if(y>282){ doc.addPage(); y=16; } const dd=new Date(d.ds+'T00:00:00'); doc.text(JOURS[(dd.getDay()+6)%7].slice(0,3)+' '+dd.toLocaleDateString('fr-FR'),14,y); doc.text((d.chantiers||'—').slice(0,62),52,y); doc.text(d.repas||'—',150,y); doc.text(String(d.supp||0),176,y); y+=6; });
+    y+=3; doc.line(14,y,196,y); y+=7; doc.setFontSize(10);
+    doc.text('Total repas extérieur : '+r.repasTot,14,y); y+=6; doc.text('Total heures supp : '+r.suppTot+' h',14,y); y+=6;
+    doc.text('Astreinte (samedis) : '+r.astrWeeks+'    Heures de sortie astreinte : '+r.sortieTot+' h',14,y);
+    zip.file('Fiche_'+(t.nom||'tech').replace(/[^a-z0-9]+/gi,'_')+'_'+month+'.pdf', doc.output('arraybuffer')); });
+  return await zip.generateAsync({type:'blob'}); }
+function exportFichesZip(){ const sel=document.getElementById('fichesMonth'); const month=(sel&&sel.value)||monthKey(new Date()); const msg=document.getElementById('fichesExportMsg'); if(msg) msg.textContent='Génération…';
+  if(!window.JSZip||!window.XLSX||!(window.jspdf&&window.jspdf.jsPDF)){ if(msg) msg.textContent='Librairies non chargées (connexion internet requise).'; return; }
+  buildFichesZipBlob(month).then(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='Fiches_techniciens_'+month+'.zip'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500); if(msg) msg.textContent='ZIP généré ✔'; }).catch(e=>{ if(msg) msg.textContent='Erreur : '+(e.message||e); }); }
 function legendHtml(){ let h='<b style="color:var(--muted)">Légende :</b>';
   db.commerciaux.forEach(c=>h+=`<span><i style="background:${esc(c.couleur||'#1b3a8c')}"></i>${esc(c.nom)}</span>`);
   h+=`<span><i style="background:${chDefaultColor()}"></i>Chantier sans commercial</span>`;
