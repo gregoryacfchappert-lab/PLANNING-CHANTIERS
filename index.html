@@ -140,6 +140,10 @@
   .mon-item.tap:active{background:#eef4ff;}
   .mon-chev{float:right;font-size:12px;font-weight:600;color:var(--bleu);background:var(--bleu-clair);padding:2px 8px;border-radius:20px;}
   .mon-creneau{font-size:13px;font-weight:700;color:#0d4a8c;margin-top:3px;}
+  .mon-legend{margin-top:14px;padding:12px 14px;background:#fff;border:1px solid var(--bord);border-radius:12px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:12px;color:var(--muted);box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .mon-legend b{color:var(--bleu);margin-right:2px;}
+  .mon-legend span{display:inline-flex;align-items:center;gap:5px;color:#333;}
+  .mon-legend i{width:13px;height:13px;border-radius:3px;display:inline-block;flex:0 0 auto;}
   .cr-badge{display:inline-block;background:rgba(255,255,255,.82);color:#0d2a5c;font-weight:700;font-size:10px;padding:0 5px;border-radius:9px;margin-left:4px;vertical-align:1px;white-space:nowrap;}
   .mon-titre{font-weight:800;font-size:17px;color:var(--txt);}
   .mon-mates{margin-top:5px;font-size:14px;color:var(--bleu);font-weight:600;}
@@ -1527,6 +1531,10 @@ function renderMon(){
     });
     html+='</div>';
   }
+  html+='<div class="mon-legend"><b>Légende :</b>'+
+    db.commerciaux.map(c=>'<span><i style="background:'+esc(c.couleur||'#1b3a8c')+'"></i>'+esc(c.nom)+'</span>').join('')+
+    '<span><i style="background:'+chDefaultColor()+'"></i>Sans commercial</span>'+
+    Object.entries(POSE_STATUS).map(([k,s])=>'<span><i style="background:'+statusColor(k)+'"></i>'+esc(s.label)+'</span>').join('')+'</div>';
   box.innerHTML=html;
 }
 function renderBanner(){
