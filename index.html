@@ -529,6 +529,14 @@
   <div class="modal-actions"><button onclick="closeFiche()">Fermer</button><button class="primary" onclick="saveFicheForm()">💾 Enregistrer la fiche</button></div>
 </div></div>
 
+<!-- MODAL : signature technicien -->
+<div class="modal-bg" id="signBg"><div class="modal" style="max-width:520px">
+  <h3>✍️ Signature du technicien</h3>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Signez dans le cadre pour valider votre fiche (au doigt sur mobile).</div>
+  <canvas id="signCanvas" width="500" height="170" style="width:100%;height:auto;border:2px dashed var(--bord);border-radius:10px;background:#fff;touch-action:none;cursor:crosshair"></canvas>
+  <div class="modal-actions"><button onclick="clearSign()">↺ Effacer</button><button onclick="closeSign()">Annuler</button><button class="primary" onclick="validateSign()">✔ Valider et enregistrer</button></div>
+</div></div>
+
 <!-- DIALOGUE : remettre le chantier dans la liste -->
 <div class="modal-bg" id="remettreBg"><div class="modal" style="max-width:420px">
   <h3>Chantier retiré du planning</h3>
@@ -1249,6 +1257,7 @@ function buildFicheForm(){ const {techId, weekStart}=ficheCtx; const t=db.techni
        '<td><input type="number" class="fiche-supp" data-ds="'+ds+'" min="0" step="0.5" value="'+(day.supp!=null&&day.supp!==''?day.supp:'')+'" placeholder="0" style="width:64px;padding:5px;border:1px solid var(--bord);border-radius:6px" oninput="ficheRecalc()"></td></tr>';
   }
   h+='</tbody></table><div id="ficheSuppTotal" style="text-align:right;font-weight:700;margin-top:6px;color:var(--bleu)"></div>';
+  h+='<div class="mfield" style="margin-top:10px"><label>Remarque (texte libre, facultatif)</label><textarea id="ficheRemarque" rows="2" placeholder="Infos complémentaires…">'+esc(f.remarque||'')+'</textarea></div>';
   if(isAstr){ const sd=new Date(mon); sd.setDate(sd.getDate()+5);
     h+='<div style="margin-top:12px;padding:10px;border:1px solid var(--bord);border-radius:10px;background:#faf7ff">'+
        '<label style="font-weight:700"><input type="checkbox" id="ficheAstr" '+(f.astreinte?'checked':'')+' style="margin-right:8px;vertical-align:-2px">Astreinte ce samedi ('+sd.toLocaleDateString('fr-FR')+')</label>'+
@@ -1260,7 +1269,23 @@ function ficheRecalc(){ let s=0; document.querySelectorAll('#ficheBody .fiche-su
 function saveFicheForm(){ if(!ficheCtx) return; const {techId, weekStart}=ficheCtx; const f=getFiche(techId,weekStart)||blankFiche(weekStart); f.days={};
   document.querySelectorAll('#ficheBody .fiche-supp').forEach(i=>{ const ds=i.getAttribute('data-ds'); const supp=parseFloat(i.value)||0; const rep=document.querySelector('#ficheBody .fiche-repas[data-ds="'+ds+'"]'); const repas=!!(rep&&rep.checked); if(supp||repas){ f.days[ds]={repas:repas, supp:supp}; } });
   const astrEl=document.getElementById('ficheAstr'); f.astreinte=astrEl?!!astrEl.checked:false; const sortieEl=document.getElementById('ficheSortie'); f.sortie=sortieEl?(parseFloat(sortieEl.value)||0):0;
-  saveFiche(techId,f); closeFiche(); toast('Fiche enregistrée ✔','ok'); if(document.getElementById('view-fiches').classList.contains('active')) renderFiches(); }
+  const remEl=document.getElementById('ficheRemarque'); f.remarque=remEl?remEl.value.trim():'';
+  openSignPad(f); }
+/* ===== Signature technicien ===== */
+let signTargetFiche=null;
+function openSignPad(fiche){ signTargetFiche=fiche; document.getElementById('signBg').classList.add('open'); setTimeout(initSignCanvas,60); }
+function closeSign(){ document.getElementById('signBg').classList.remove('open'); signTargetFiche=null; }
+function initSignCanvas(){ const c=document.getElementById('signCanvas'); if(!c) return; const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#111'; c._has=false; let drawing=false, last=null;
+  function pos(e){ const r=c.getBoundingClientRect(); const tp=(e.touches&&e.touches[0])||e; return {x:(tp.clientX-r.left)*(c.width/r.width), y:(tp.clientY-r.top)*(c.height/r.height)}; }
+  function start(e){ e.preventDefault(); drawing=true; last=pos(e); }
+  function move(e){ if(!drawing) return; e.preventDefault(); const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; c._has=true; }
+  function end(){ drawing=false; }
+  c.onmousedown=start; c.onmousemove=move; c.onmouseup=end; c.onmouseleave=end; c.ontouchstart=start; c.ontouchmove=move; c.ontouchend=end; }
+function clearSign(){ const c=document.getElementById('signCanvas'); if(c){ c.getContext('2d').clearRect(0,0,c.width,c.height); c._has=false; } }
+function validateSign(){ if(!signTargetFiche) return; const c=document.getElementById('signCanvas');
+  if(!c._has){ if(!confirm('Aucune signature dessinée. Enregistrer la fiche sans signature ?')) return; signTargetFiche.signature=''; }
+  else { signTargetFiche.signature=c.toDataURL('image/png'); }
+  const techId=ficheCtx.techId; saveFiche(techId, signTargetFiche); closeSign(); closeFiche(); toast('Fiche signée et enregistrée ✔','ok'); if(document.getElementById('view-fiches').classList.contains('active')) renderFiches(); }
 /* ===== Gestion : onglet Fiches techniciens ===== */
 function monthsWithFiches(){ const set=new Set(); Object.values(db.fiches||{}).forEach(wk=>Object.values(wk||{}).forEach(f=>{ if(f&&f.days) Object.keys(f.days).forEach(ds=>set.add(ds.slice(0,7))); if(f&&f.weekStart){ const sat=new Date(f.weekStart+'T00:00:00'); sat.setDate(sat.getDate()+5); set.add(monthKey(sat)); set.add(f.weekStart.slice(0,7)); } })); set.add(monthKey(new Date())); return [...set].sort().reverse(); }
 function shortWk(ws){ const d=new Date(ws+'T00:00:00'); return 'S'+isoWeek(d)+' du '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
@@ -1268,10 +1293,10 @@ function ficheMonthAgg(techId, month){ const wk=(db.fiches&&db.fiches[techId])||
 function renderFiches(){ const sel=document.getElementById('fichesMonth'); if(!sel) return; const months=monthsWithFiches(); const curVal=sel.value||monthKey(new Date()); sel.innerHTML=months.map(m=>'<option value="'+m+'"'+(m===curVal?' selected':'')+'>'+esc(capFirst(monthLabel(m)))+'</option>').join(''); const month=sel.value||curVal;
   const rows=db.techniciens.map(t=>Object.assign({t}, ficheMonthAgg(t.id,month)));
   const any=rows.some(r=>r.weeks.length);
-  let html='<table class="grid"><thead><tr><th>Technicien</th><th>Repas ext.</th><th>Heures supp</th><th>Astreinte (samedis)</th><th>H. sortie</th><th>Semaines (cliquer pour éditer)</th></tr></thead><tbody>';
-  rows.forEach(r=>{ html+='<tr><td><b>'+esc(r.t.nom)+'</b></td><td style="text-align:center">'+r.repas+'</td><td style="text-align:center">'+r.supp+' h</td><td style="text-align:center">'+(r.astrWeeks||'—')+'</td><td style="text-align:center">'+(r.sortie||0)+' h</td><td>'+(r.weeks.length?r.weeks.map(w=>'<button class="small" onclick="openFiche(\''+r.t.id+'\',\''+w+'\')">'+shortWk(w)+'</button>').join(' '):'<button class="small ghost" onclick="openFiche(\''+r.t.id+'\',\''+ficheMonthFirstMonday(month)+'\')">+ saisir</button>')+'</td></tr>'; });
+  let html='<table class="grid"><thead><tr><th>Technicien</th><th>Repas ext.</th><th>Heures supp</th><th>Astreinte (samedis)</th><th>H. sortie</th><th>Semaines saisies</th><th>Fiche PDF</th></tr></thead><tbody>';
+  rows.forEach(r=>{ const has=r.weeks.length>0; html+='<tr><td><b>'+esc(r.t.nom)+'</b></td><td style="text-align:center">'+r.repas+'</td><td style="text-align:center">'+r.supp+' h</td><td style="text-align:center">'+(r.astrWeeks||'—')+'</td><td style="text-align:center">'+(r.sortie||0)+' h</td><td style="font-size:12px;color:var(--muted)">'+(has?r.weeks.map(shortWk).join(' · '):'—')+'</td><td>'+(has?'<button class="small primary" onclick="openTechPdf(\''+r.t.id+'\',\''+month+'\')">📄 Voir le PDF</button>':'<span style="color:var(--muted)">—</span>')+'</td></tr>'; });
   html+='</tbody></table>';
-  if(!any) html+='<div style="color:var(--muted);font-size:13px;margin-top:10px">Aucune fiche saisie pour ce mois pour l\'instant. Les techniciens remplissent leur fiche depuis la version mobile ; vous pouvez aussi saisir/éditer ici via « + saisir ».</div>';
+  if(!any) html+='<div style="color:var(--muted);font-size:13px;margin-top:10px">Aucune fiche saisie pour ce mois pour l\'instant. Les techniciens remplissent et signent leur fiche depuis la version mobile.</div>';
   document.getElementById('fichesWrap').innerHTML=html;
 }
 function ficheMonthFirstMonday(month){ const p=month.split('-'); const d=new Date(parseInt(p[0]),parseInt(p[1])-1,1); return ymd(mondayOf(d)); }
@@ -1279,23 +1304,35 @@ function techFicheRows(techId, month){ const wk=(db.fiches&&db.fiches[techId])||
   Object.keys(wk).sort().forEach(ws=>{ const f=wk[ws]; if(f&&f.days){ Object.keys(f.days).forEach(ds=>{ if(ds.slice(0,7)===month){ const d=f.days[ds]; const supp=parseFloat(d.supp)||0; suppTot+=supp; if(d.repas) repasTot++; days.push({ds, chantiers:chantiersOfDay(ds,techId).join(' + '), repas:d.repas?'Oui':'', supp}); } }); }
     const sat=new Date(ws+'T00:00:00'); sat.setDate(sat.getDate()+5); if(monthKey(sat)===month){ if(f&&f.astreinte) astrWeeks++; if(f&&f.sortie) sortieTot+=parseFloat(f.sortie)||0; } });
   days.sort((a,b)=>a.ds<b.ds?-1:1); return {days, suppTot:Math.round(suppTot*100)/100, repasTot, sortieTot:Math.round(sortieTot*100)/100, astrWeeks}; }
+function techWeeksInMonth(techId, month){ const wk=(db.fiches&&db.fiches[techId])||{}; const out=[]; Object.keys(wk).sort().forEach(ws=>{ const f=wk[ws]; let inM=false; if(f&&f.days){ Object.keys(f.days).forEach(ds=>{ if(ds.slice(0,7)===month) inM=true; }); } const sat=new Date(ws+'T00:00:00'); sat.setDate(sat.getDate()+5); if(monthKey(sat)===month) inM=true; if(inM) out.push({ws, remarque:(f&&f.remarque)||'', signature:(f&&f.signature)||''}); }); return out; }
+function techHasData(techId, month){ const r=techFicheRows(techId,month); return !!(r.days.length||r.astrWeeks||r.sortieTot||r.repasTot||techWeeksInMonth(techId,month).some(w=>w.remarque||w.signature)); }
+function buildTechPdfDoc(techId, month){ const { jsPDF }=window.jspdf; const t=db.techniciens.find(x=>x.id===techId)||{nom:''}; const r=techFicheRows(techId,month); const monthLbl=capFirst(monthLabel(month));
+  const doc=new jsPDF(); let y=16; doc.setFontSize(14); doc.text('Fiche technicien — '+(t.nom||''), 14, y); y+=7; doc.setFontSize(11); doc.text('Mois : '+monthLbl, 14, y); y+=9;
+  doc.setFontSize(9); doc.text('Jour',14,y); doc.text('Chantier(s)',52,y); doc.text('Repas',150,y); doc.text('H.supp',176,y); y+=2; doc.line(14,y,196,y); y+=5;
+  r.days.forEach(d=>{ if(y>282){ doc.addPage(); y=16; } const dd=new Date(d.ds+'T00:00:00'); doc.text(JOURS[(dd.getDay()+6)%7].slice(0,3)+' '+dd.toLocaleDateString('fr-FR'),14,y); doc.text((d.chantiers||'—').slice(0,62),52,y); doc.text(d.repas||'—',150,y); doc.text(String(d.supp||0),176,y); y+=6; });
+  if(!r.days.length){ doc.text('Aucun jour saisi ce mois.',14,y); y+=6; }
+  y+=3; doc.line(14,y,196,y); y+=7; doc.setFontSize(10);
+  doc.text('Total repas extérieur : '+r.repasTot,14,y); y+=6; doc.text('Total heures supp : '+r.suppTot+' h',14,y); y+=6;
+  doc.text('Astreinte (samedis) : '+r.astrWeeks+'    Heures de sortie astreinte : '+r.sortieTot+' h',14,y); y+=10;
+  techWeeksInMonth(techId,month).forEach(w=>{ if(y>248){ doc.addPage(); y=16; } const mon=new Date(w.ws+'T00:00:00'); doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.text('Semaine du '+mon.toLocaleDateString('fr-FR'),14,y); doc.setFont('helvetica','normal'); y+=6;
+    if(w.remarque){ doc.setFontSize(9); const lines=doc.splitTextToSize('Remarque : '+w.remarque,180); doc.text(lines,14,y); y+=lines.length*4.5+2; }
+    doc.setFontSize(9); doc.text('Signature technicien :',14,y+5);
+    if(w.signature){ try{ doc.addImage(w.signature,'PNG',58,y-6,55,20); }catch(e){ doc.text('(signature illisible)',58,y+5); } }
+    else { doc.text('(non signée)',58,y+5); }
+    y+=24; });
+  return doc; }
+function openTechPdf(techId, month){ if(!(window.jspdf&&window.jspdf.jsPDF)){ alert('Librairie PDF non chargée (connexion internet requise).'); return; } const doc=buildTechPdfDoc(techId,month); try{ const url=doc.output('bloburl'); window.open(url,'_blank'); }catch(e){ doc.save('Fiche_'+month+'.pdf'); } }
 async function buildFichesZipBlob(month){ if(!window.JSZip||!window.XLSX||!(window.jspdf&&window.jspdf.jsPDF)) throw new Error('Librairies non chargées');
-  const zip=new JSZip(); const monthLbl=capFirst(monthLabel(month));
+  const zip=new JSZip();
   const recap=[['Technicien','Repas ext (nb)','Heures supp','Astreinte (samedis)','Heures sortie astreinte']];
   const detail=[['Technicien','Date','Jour','Chantier(s)','Repas ext','Heures supp']];
+  const remarks=[['Technicien','Semaine','Remarque','Signée']];
   db.techniciens.forEach(t=>{ const r=techFicheRows(t.id,month); recap.push([t.nom, r.repasTot, r.suppTot, r.astrWeeks, r.sortieTot]);
-    r.days.forEach(d=>{ const dd=new Date(d.ds+'T00:00:00'); detail.push([t.nom, dd.toLocaleDateString('fr-FR'), JOURS[(dd.getDay()+6)%7], d.chantiers, d.repas, d.supp]); }); });
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recap), 'Récap mensuel'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), 'Détail');
+    r.days.forEach(d=>{ const dd=new Date(d.ds+'T00:00:00'); detail.push([t.nom, dd.toLocaleDateString('fr-FR'), JOURS[(dd.getDay()+6)%7], d.chantiers, d.repas, d.supp]); });
+    techWeeksInMonth(t.id,month).forEach(w=>{ const mon=new Date(w.ws+'T00:00:00'); remarks.push([t.nom, mon.toLocaleDateString('fr-FR'), w.remarque, w.signature?'Oui':'Non']); }); });
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recap), 'Récap mensuel'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), 'Détail'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(remarks), 'Remarques');
   zip.file('RECAP_'+month+'.xlsx', XLSX.write(wb,{bookType:'xlsx',type:'array'}));
-  const { jsPDF }=window.jspdf;
-  db.techniciens.forEach(t=>{ const r=techFicheRows(t.id,month); if(!r.days.length && !r.astrWeeks && !r.sortieTot && !r.repasTot) return;
-    const doc=new jsPDF(); let y=16; doc.setFontSize(14); doc.text('Fiche technicien — '+t.nom, 14, y); y+=7; doc.setFontSize(11); doc.text('Mois : '+monthLbl, 14, y); y+=9;
-    doc.setFontSize(9); doc.text('Jour',14,y); doc.text('Chantier(s)',52,y); doc.text('Repas',150,y); doc.text('H.supp',176,y); y+=2; doc.line(14,y,196,y); y+=5;
-    r.days.forEach(d=>{ if(y>282){ doc.addPage(); y=16; } const dd=new Date(d.ds+'T00:00:00'); doc.text(JOURS[(dd.getDay()+6)%7].slice(0,3)+' '+dd.toLocaleDateString('fr-FR'),14,y); doc.text((d.chantiers||'—').slice(0,62),52,y); doc.text(d.repas||'—',150,y); doc.text(String(d.supp||0),176,y); y+=6; });
-    y+=3; doc.line(14,y,196,y); y+=7; doc.setFontSize(10);
-    doc.text('Total repas extérieur : '+r.repasTot,14,y); y+=6; doc.text('Total heures supp : '+r.suppTot+' h',14,y); y+=6;
-    doc.text('Astreinte (samedis) : '+r.astrWeeks+'    Heures de sortie astreinte : '+r.sortieTot+' h',14,y);
-    zip.file('Fiche_'+(t.nom||'tech').replace(/[^a-z0-9]+/gi,'_')+'_'+month+'.pdf', doc.output('arraybuffer')); });
+  db.techniciens.forEach(t=>{ if(!techHasData(t.id,month)) return; const doc=buildTechPdfDoc(t.id,month); zip.file('Fiche_'+(t.nom||'tech').replace(/[^a-z0-9]+/gi,'_')+'_'+month+'.pdf', doc.output('arraybuffer')); });
   return await zip.generateAsync({type:'blob'}); }
 function exportFichesZip(){ const sel=document.getElementById('fichesMonth'); const month=(sel&&sel.value)||monthKey(new Date()); const msg=document.getElementById('fichesExportMsg'); if(msg) msg.textContent='Génération…';
   if(!window.JSZip||!window.XLSX||!(window.jspdf&&window.jspdf.jsPDF)){ if(msg) msg.textContent='Librairies non chargées (connexion internet requise).'; return; }
