@@ -1388,6 +1388,9 @@ function downloadWeekPdf(techId, ws){ if(!(window.jspdf&&window.jspdf.jsPDF)){ a
 const XL_TITLE={font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1B3A8C'}},alignment:{horizontal:'left',vertical:'center'}};
 const XL_HEAD={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1B3A8C'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:xlBorder('FFFFFF')};
 const XL_TOTAL={font:{bold:true},fill:{fgColor:{rgb:'EAF0FB'}},border:xlBorder('C7D4EC')};
+const XL_BAND={font:{bold:true,sz:12,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2E4FA0'}},alignment:{horizontal:'left',vertical:'center'}};
+const XL_TOTROW={font:{bold:true},fill:{fgColor:{rgb:'DCE6F7'}},border:xlBorder('AEBFE0')};
+function xlCell(ws,r,c,style){ const a=XLSX.utils.encode_cell({r:r,c:c}); if(!ws[a]) ws[a]={t:'s',v:''}; ws[a].s=style; }
 function xlBorder(rgb){ const s={style:'thin',color:{rgb:rgb||'D5DCEA'}}; return {top:s,bottom:s,left:s,right:s}; }
 function styleSheet(ws, headRow, nCols, lastRow){ // headRow 0-based
   const addr=(r,c)=>XLSX.utils.encode_cell({r:r,c:c});
@@ -1396,16 +1399,32 @@ function styleSheet(ws, headRow, nCols, lastRow){ // headRow 0-based
   for(let c=0;c<nCols;c++){ const h=ws[addr(headRow,c)]; if(h) h.s=XL_HEAD; }
   for(let r=headRow+1;r<=lastRow;r++){ for(let c=0;c<nCols;c++){ const cell=ws[addr(r,c)]; if(cell){ cell.s=cell.s||{}; cell.s.border=xlBorder(); cell.s.alignment=cell.s.alignment||{vertical:'center'}; } } }
 }
-function buildFichesWorkbook(month){ const monthLbl=capFirst(monthLabel(month)); const wb=XLSX.utils.book_new();
-  // 1) Récap hebdomadaire (heures supp par semaine)
-  const hebdo=[['RÉCAP HEBDOMADAIRE — '+monthLbl],[],['Technicien','Semaine','Période','Repas ext.','Heures supp.','Astreinte','H. sortie']];
-  db.techniciens.forEach(t=>{ techActiveWeeks(t.id,month).forEach(ws=>{ const w=weekData(t.id,ws); hebdo.push([t.nom,'S'+w.wkNum, w.mon.toLocaleDateString('fr-FR')+' – '+w.sat.toLocaleDateString('fr-FR'), w.repasTot, w.suppTot, w.astreinte?'Oui':'', w.sortie]); }); });
-  const wsH=XLSX.utils.aoa_to_sheet(hebdo); wsH['!cols']=[{wch:22},{wch:9},{wch:24},{wch:12},{wch:13},{wch:11},{wch:11}]; wsH['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}]; styleSheet(wsH,2,7,hebdo.length-1); XLSX.utils.book_append_sheet(wb, wsH, 'Récap hebdo');
-  // 2) Totaux du mois
-  const tot=[['TOTAUX DU MOIS — '+monthLbl],[],['Technicien','Repas ext. (nb)','Heures supp.','Astreinte (nb samedis)','Heures sortie']];
-  let tR=0,tS=0,tA=0,tO=0; db.techniciens.forEach(t=>{ const r=techAgenda(t.id,month); tot.push([t.nom, r.repasTot, r.suppTot, r.astrWeeks, r.sortieTot]); tR+=r.repasTot; tS+=r.suppTot; tA+=r.astrWeeks; tO+=r.sortieTot; });
-  tot.push(['TOTAL', tR, Math.round(tS*100)/100, tA, Math.round(tO*100)/100]);
-  const wsT=XLSX.utils.aoa_to_sheet(tot); wsT['!cols']=[{wch:22},{wch:16},{wch:14},{wch:22},{wch:16}]; wsT['!merges']=[{s:{r:0,c:0},e:{r:0,c:4}}]; styleSheet(wsT,2,5,tot.length-1); { const a=XLSX.utils.encode_cell({r:tot.length-1,c:0}); for(let c=0;c<5;c++){ const cell=wsT[XLSX.utils.encode_cell({r:tot.length-1,c:c})]; if(cell) cell.s=XL_TOTAL; } } XLSX.utils.book_append_sheet(wb, wsT, 'Totaux mois');
+function buildFichesWorkbook(month){ const monthLbl=capFirst(monthLabel(month)); const wb=XLSX.utils.book_new(); const base=parseFloat(db.params&&db.params.hSem)||39;
+  // 1) RÉCAP HEURES — regroupé par technicien, avec total par technicien et total d'heures (base + supp)
+  const A=[]; const merges=[]; const cellStyles=[];
+  const pushRow=a=>{ A.push(a); return A.length-1; };
+  let r0=pushRow(['RÉCAP HEURES — '+monthLbl+'   (base '+base+' h/semaine + heures supp)']); merges.push({s:{r:r0,c:0},e:{r:r0,c:7}}); cellStyles.push([r0,0,XL_TITLE]);
+  pushRow([]);
+  const HEAD=['Semaine','Période','H. base','H. supp','Total heures','Repas ext.','Astreinte','H. sortie'];
+  let hr=pushRow(HEAD); for(let c=0;c<8;c++) cellStyles.push([hr,c,XL_HEAD]);
+  let gB=0,gS=0,gT=0,gR=0,gA=0,gO=0;
+  db.techniciens.forEach(t=>{ const weeks=techActiveWeeks(t.id,month); if(!weeks.length) return;
+    let br=pushRow([t.nom]); merges.push({s:{r:br,c:0},e:{r:br,c:7}}); for(let c=0;c<8;c++) cellStyles.push([br,c,XL_BAND]);
+    let sB=0,sS=0,sT=0,sR=0,sA=0,sO=0;
+    weeks.forEach(ws=>{ const w=weekData(t.id,ws); const tot=Math.round((base+w.suppTot)*100)/100; sB+=base; sS+=w.suppTot; sT+=tot; sR+=w.repasTot; sA+=(w.astreinte?1:0); sO+=w.sortie;
+      let rr=pushRow(['S'+w.wkNum, w.mon.toLocaleDateString('fr-FR')+' – '+w.sat.toLocaleDateString('fr-FR'), base, w.suppTot, tot, w.repasTot, (w.astreinte?'Oui':''), w.sortie]);
+      for(let c=0;c<8;c++) cellStyles.push([rr,c,{border:xlBorder(),alignment:{horizontal:(c>=2?'center':'left'),vertical:'center'}}]); });
+    let tr=pushRow(['TOTAL '+t.nom, weeks.length+' sem.', Math.round(sB*100)/100, Math.round(sS*100)/100, Math.round(sT*100)/100, sR, sA, Math.round(sO*100)/100]);
+    for(let c=0;c<8;c++) cellStyles.push([tr,c,Object.assign({alignment:{horizontal:(c>=2?'center':'left'),vertical:'center'}}, XL_TOTROW)]);
+    gB+=sB; gS+=sS; gT+=sT; gR+=sR; gA+=sA; gO+=sO; pushRow([]); });
+  let gr=pushRow(['TOTAL GÉNÉRAL','', Math.round(gB*100)/100, Math.round(gS*100)/100, Math.round(gT*100)/100, gR, gA, Math.round(gO*100)/100]); for(let c=0;c<8;c++) cellStyles.push([gr,c,Object.assign({alignment:{horizontal:(c>=2?'center':'left'),vertical:'center'}},XL_TOTAL,{font:{bold:true,sz:12}})]);
+  const wsH=XLSX.utils.aoa_to_sheet(A); wsH['!cols']=[{wch:22},{wch:26},{wch:9},{wch:9},{wch:13},{wch:11},{wch:10},{wch:10}]; wsH['!merges']=merges;
+  cellStyles.forEach(([r,c,s])=>xlCell(wsH,r,c,s)); XLSX.utils.book_append_sheet(wb, wsH, 'Récap heures');
+  // 2) Totaux du mois (une ligne par technicien)
+  const tot=[['TOTAUX DU MOIS — '+monthLbl],[],['Technicien','Semaines','H. base','Heures supp.','Total heures','Repas ext.','Astreinte (sam.)','H. sortie']];
+  let tB=0,tS=0,tT=0,tR=0,tA=0,tO=0; db.techniciens.forEach(t=>{ const weeks=techActiveWeeks(t.id,month); if(!weeks.length) return; const r=techAgenda(t.id,month); const nb=weeks.length; const hb=nb*base; const th=Math.round((hb+r.suppTot)*100)/100; tot.push([t.nom, nb, hb, r.suppTot, th, r.repasTot, r.astrWeeks, r.sortieTot]); tB+=hb; tS+=r.suppTot; tT+=th; tR+=r.repasTot; tA+=r.astrWeeks; tO+=r.sortieTot; });
+  tot.push(['TOTAL','', Math.round(tB*100)/100, Math.round(tS*100)/100, Math.round(tT*100)/100, tR, tA, Math.round(tO*100)/100]);
+  const wsT=XLSX.utils.aoa_to_sheet(tot); wsT['!cols']=[{wch:22},{wch:10},{wch:9},{wch:12},{wch:13},{wch:11},{wch:14},{wch:10}]; wsT['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}]; styleSheet(wsT,2,8,tot.length-1); for(let c=0;c<8;c++) xlCell(wsT,tot.length-1,c,XL_TOTAL); XLSX.utils.book_append_sheet(wb, wsT, 'Totaux mois');
   // 3) Détail agenda
   const detail=[['DÉTAIL AGENDA — '+monthLbl],[],['Technicien','Date','Jour','Tâches / chantiers','Repas ext.','Heures supp.']];
   db.techniciens.forEach(t=>{ const r=techAgenda(t.id,month); r.days.forEach(d=>{ const dd=new Date(d.ds+'T00:00:00'); detail.push([t.nom, dd.toLocaleDateString('fr-FR'), JOURS[(dd.getDay()+6)%7], d.chantiers||'—', d.repas||'', d.supp||0]); }); });
