@@ -144,6 +144,8 @@
   .mon-legend b{color:var(--bleu);margin-right:2px;}
   .mon-legend span{display:inline-flex;align-items:center;gap:5px;color:#333;}
   .mon-legend i{width:13px;height:13px;border-radius:3px;display:inline-block;flex:0 0 auto;}
+  .info-banner{background:linear-gradient(90deg,#fff3cf,#fffdf5);border:1px solid #e9c46a;border-left:6px solid #e0a800;border-radius:12px;padding:12px 16px;margin-bottom:12px;font-size:15px;line-height:1.4;color:#5a4616;box-shadow:0 1px 3px rgba(0,0,0,.07);}
+  .info-banner b{color:#8a5a00;}
   .cr-badge{display:inline-block;background:rgba(255,255,255,.82);color:#0d2a5c;font-weight:700;font-size:10px;padding:0 5px;border-radius:9px;margin-left:4px;vertical-align:1px;white-space:nowrap;}
   .mon-titre{font-weight:800;font-size:17px;color:var(--txt);}
   .mon-mates{margin-top:5px;font-size:14px;color:var(--bleu);font-weight:600;}
@@ -701,7 +703,7 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.c
     logo:DEFAULT_LOGO }; }
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
   d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.hVendredi==null)d.params.hVendredi=7; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
-  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(!d.logo)d.logo=DEFAULT_LOGO;
+  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(d.params.infoMsg==null)d.params.infoMsg=''; if(!d.logo)d.logo=DEFAULT_LOGO;
   if(!d.fiches||typeof d.fiches!=='object') d.fiches={};
   d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien='';
     if(c.matEtat==null){ c.matEtat = c.matRecu ? 'recu' : ((c.materiel==='oui')?'cmd':'non'); }
@@ -1485,15 +1487,18 @@ function buildGrid(ro){
   const w2=new Date(weekStart); w2.setDate(w2.getDate()+7);
   return buildWeekTable(weekStart,ro)+'<div class="wk-sep"></div>'+buildWeekTable(w2,ro);
 }
+function renderInfoEditor(){ const msg=(db.params&&db.params.infoMsg)||''; const el=document.getElementById('matAlertBar'); if(!el) return;
+  el.innerHTML='<div style="background:#eef4ff;border:1px solid #c9d9f5;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="color:var(--bleu);white-space:nowrap">ℹ Information équipe :</b><input id="infoMsgInput" value="'+esc(msg)+'" placeholder="Message affiché en haut du planning technicien…" style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--bord);border-radius:8px" onkeyup="if(event.key===\'Enter\')saveInfoMsg()"><button class="small primary" onclick="saveInfoMsg()">💾 Enregistrer</button>'+(msg?'<button class="small rouge" onclick="clearInfoMsg()">✖ Effacer</button>':'')+'</div>'; }
+function saveInfoMsg(){ const el=document.getElementById('infoMsgInput'); const v=(el?el.value:'').trim(); db.params=db.params||{}; db.params.infoMsg=v; persist(); renderInfoEditor(); toast('Information équipe enregistrée','ok'); }
+function clearInfoMsg(){ db.params=db.params||{}; db.params.infoMsg=''; persist(); renderInfoEditor(); toast('Information effacée','ok'); }
+function infoBannerHtml(){ const msg=(db.params&&db.params.infoMsg)||''; return msg?'<div class="info-banner">📢 <b>Information :</b> '+esc(msg)+'</div>':''; }
 function renderPlanning(){
   document.getElementById('planLegend').innerHTML=legendHtml();
-  const alerts=db.chantiers.filter(matAlertActive);
-  document.getElementById('matAlertBar').innerHTML=alerts.length?
-    '<div style="background:#fff7e8;border:1px solid var(--orange);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:13px"><b style="color:#8a5a00">⚠ Matériel à commander :</b> '+alerts.map(c=>esc(c.client)).join(' · ')+'</div>':'';
+  renderInfoEditor();
   renderTypeBanner(); renderBanner();
   document.getElementById('planGridWrap').innerHTML=buildGrid(false);
 }
-function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML='<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
+function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML=infoBannerHtml()+'<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
 /* ===== Mon planning (mobile) ===== */
 let monWeekStart=mondayOf(new Date());
 function monWeekShift(n){ monWeekStart.setDate(monWeekStart.getDate()+n*7); renderMon(); }
@@ -1513,7 +1518,7 @@ function renderMon(){
   if(!myId){ box.innerHTML='<div class="empty" style="margin-top:18px">'+(techLinkMode?'Lien non valide. Contactez votre responsable.':'👆 Sélectionnez votre nom en haut pour voir votre planning.')+'</div>'; return; }
   const myRole=(db.techniciens.find(t=>t.id===myId)||{}).role||'';
   const wk=isoWeek(monWeekStart); const end=new Date(monWeekStart); end.setDate(end.getDate()+5); const todayStr=ymd(new Date());
-  let html='<div class="mon-weekh">Semaine '+wk+'<br><span style="font-weight:500;color:var(--muted);font-size:13px">du '+monWeekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</span></div>';
+  let html=infoBannerHtml()+'<div class="mon-weekh">Semaine '+wk+'<br><span style="font-weight:500;color:var(--muted);font-size:13px">du '+monWeekStart.toLocaleDateString('fr-FR')+' au '+end.toLocaleDateString('fr-FR')+'</span></div>';
   for(let i=0;i<6;i++){ const d=new Date(monWeekStart); d.setDate(d.getDate()+i); const ds=ymd(d); const ferie=frenchHolidays(d.getFullYear()).has(ds);
     const ps=posesOrdered(ds,myId);
     html+='<div class="mon-day'+(ds===todayStr?' today':'')+'"><div class="mon-dname"><span>'+JOURS[i]+' '+d.toLocaleDateString('fr-FR')+'</span>'+(ferie?'<span class="ferie">Férié</span>':'')+'</div>';
