@@ -585,7 +585,7 @@
 <!-- MODAL : collègues à proximité (carte Google Maps) -->
 <div class="modal-bg" id="collBg"><div class="modal" style="max-width:660px">
   <h3>👥 Collègues à proximité</h3>
-  <div class="mfield"><label>Jour</label><input id="collDate" type="date" onchange="renderCollMap()"></div>
+  <div class="mfield"><label>Jour</label><input id="collDate" type="date" onchange="collRefresh()"></div>
   <div id="collMap" style="width:100%;height:360px;border:1px solid var(--bord);border-radius:10px;background:#eef2f8"></div>
   <div id="collList" style="margin-top:10px;font-size:13px;max-height:150px;overflow:auto"></div>
   <div class="modal-actions"><button class="primary" onclick="closeColleaguesMap()">Fermer</button></div>
@@ -1073,32 +1073,36 @@ function geocodeGroup(gid, adresse){ const key=(db.params&&db.params.gmapsKey||'
 /* ===== Google Maps : chargeur + carte collègues ===== */
 let _gmapsPromise=null;
 function loadGmaps(){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key) return Promise.reject('nokey');
-  if(window.google&&window.google.maps&&window.google.maps.places) return Promise.resolve();
+  if(window.google&&window.google.maps&&window.google.maps.Map) return Promise.resolve();
   if(_gmapsPromise) return _gmapsPromise;
-  _gmapsPromise=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=fr&region=FR&loading=async&v=weekly'; s.async=true; s.defer=true; s.onload=()=>res(); s.onerror=()=>{ _gmapsPromise=null; rej('loaderror'); }; document.head.appendChild(s); });
+  _gmapsPromise=new Promise((res,rej)=>{ window.__acfGmapsReady=function(){ res(); }; const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=fr&region=FR&loading=async&v=weekly&callback=__acfGmapsReady'; s.async=true; s.onerror=()=>{ _gmapsPromise=null; rej('loaderror'); }; document.head.appendChild(s);
+    setTimeout(()=>{ if(!(window.google&&google.maps&&google.maps.Map)){ _gmapsPromise=null; rej('timeout'); } }, 12000); });
   return _gmapsPromise; }
 let collMap=null, collInfo=null;
+function collGroups(ds){ const groups={}; db.poses.filter(p=>p.type==='chantier'&&p.date===ds).forEach(p=>{ const key=p.chantierId?('C:'+p.chantierId):('L:'+(p.groupId||p.label||p.id)); if(!groups[key]) groups[key]={techs:[],sample:p,chantierId:p.chantierId||''}; groups[key].techs.push(p.techId); });
+  return Object.values(groups).map(g=>{ let lat,lng,name,adr; if(g.chantierId){ const ch=db.chantiers.find(c=>c.id===g.chantierId); if(!ch) return null; lat=ch.lat; lng=ch.lng; name=ch.client; adr=ch.adresse||''; } else { lat=g.sample.lat; lng=g.sample.lng; name=g.sample.label||'Tâche'; adr=g.sample.adresse||''; } return {lat,lng,name,adr,techIds:[...new Set(g.techs)]}; }).filter(Boolean); }
+function collListText(ds){ const myId=ficheMyId(); const items=collGroups(ds); if(!items.length) return '<div style="color:var(--muted)">Aucun chantier ce jour.</div>';
+  return '<div style="font-weight:700;margin-bottom:4px">Chantiers / tâches du jour :</div>'+items.map(g=>{ const techs=g.techIds.map(id=>techName(id)).filter(Boolean); const mine=g.techIds.includes(myId); const geo=(g.lat!=null&&g.lng!=null);
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--bord)'+(geo?'':';color:var(--muted)')+'">'+(mine?'📍 ':'• ')+'<b>'+esc(g.name)+'</b> — '+esc(techs.join(', '))+(g.adr?' · <span style="font-size:11px">'+esc(g.adr)+'</span>':'')+(geo?'':' <span style="font-size:11px">(non géolocalisé)</span>')+'</div>'; }).join(''); }
 function openColleaguesMap(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionnez d\'abord votre nom en haut.'); return; }
   document.getElementById('collBg').classList.add('open'); document.getElementById('collDate').value=ymd(new Date());
+  collRefresh();
   const key=(db.params&&db.params.gmapsKey||'').trim();
-  if(!key){ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Carte non configurée.<br>Le responsable doit ajouter la clé Google Maps dans les Paramètres.</div>'; document.getElementById('collList').innerHTML=''; return; }
+  if(!key){ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Carte non configurée.<br>Le responsable doit ajouter la clé Google Maps dans les Paramètres.</div>'; return; }
   document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Chargement de la carte…</div>';
-  loadGmaps().then(()=>{ collMap=null; renderCollMap(); }).catch(()=>{ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--rouge)">Impossible de charger la carte (clé invalide ou pas de connexion).</div>'; }); }
+  loadGmaps().then(()=>{ collMap=null; collInfo=null; renderCollMarkers(); }).catch(()=>{ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--rouge)">Carte indisponible (vérifiez la clé Google Maps ou la connexion). La liste ci-dessous reste utilisable.</div>'; }); }
 function closeColleaguesMap(){ document.getElementById('collBg').classList.remove('open'); }
-function renderCollMap(){ if(!(window.google&&google.maps)) return; const ds=document.getElementById('collDate').value||ymd(new Date()); const myId=ficheMyId();
-  const poses=db.poses.filter(p=>p.type==='chantier'&&p.date===ds);
-  const groups={}; poses.forEach(p=>{ const key=p.chantierId?('C:'+p.chantierId):('L:'+(p.groupId||p.label||p.id)); if(!groups[key]) groups[key]={techs:[],sample:p,chantierId:p.chantierId||''}; groups[key].techs.push(p.techId); });
+function collRefresh(){ const ds=document.getElementById('collDate').value||ymd(new Date()); document.getElementById('collList').innerHTML=collListText(ds); if(window.google&&google.maps&&google.maps.Map) renderCollMarkers(); }
+function renderCollMarkers(){ if(!(window.google&&google.maps&&google.maps.Map)) return; const ds=document.getElementById('collDate').value||ymd(new Date()); const myId=ficheMyId();
   const mapEl=document.getElementById('collMap'); if(!collMap){ mapEl.innerHTML=''; collMap=new google.maps.Map(mapEl,{center:{lat:43.9277,lng:2.1478},zoom:9,mapTypeControl:false,streetViewControl:false,fullscreenControl:false}); collInfo=new google.maps.InfoWindow(); }
   if(collMap._markers) collMap._markers.forEach(m=>m.setMap(null)); collMap._markers=[];
-  const bounds=new google.maps.LatLngBounds(); let n=0; const listRows=[];
-  Object.values(groups).forEach(g=>{ let lat,lng,name,adr; if(g.chantierId){ const ch=db.chantiers.find(c=>c.id===g.chantierId); if(!ch) return; lat=ch.lat; lng=ch.lng; name=ch.client; adr=ch.adresse||''; } else { lat=g.sample.lat; lng=g.sample.lng; name=g.sample.label||'Tâche'; adr=g.sample.adresse||''; }
-    const techs=[...new Set(g.techs)].map(id=>techName(id)).filter(Boolean); const mine=g.techs.includes(myId);
-    if(lat!=null&&lng!=null){ const pos={lat:lat,lng:lng}; const m=new google.maps.Marker({position:pos,map:collMap,title:name, icon:mine?{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#e2231a',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}:undefined});
-      m.addListener('click',()=>{ collInfo.setContent('<b>'+esc(name)+'</b>'+(mine?' <span style="color:#e2231a">(vous)</span>':'')+'<br>'+esc(adr)+'<br><b>👷 </b>'+esc(techs.join(', '))); collInfo.open(collMap,m); });
-      collMap._markers.push(m); bounds.extend(pos); n++; listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord)">'+(mine?'📍 ':'• ')+'<b>'+esc(name)+'</b> — '+esc(techs.join(', '))+'</div>'); }
-    else { listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord);color:var(--muted)">• '+esc(name)+' — '+esc(techs.join(', '))+' <span style="font-size:11px">(adresse non géolocalisée)</span></div>'); } });
+  const bounds=new google.maps.LatLngBounds(); let n=0;
+  collGroups(ds).forEach(g=>{ if(g.lat==null||g.lng==null) return; const techs=g.techIds.map(id=>techName(id)).filter(Boolean); const mine=g.techIds.includes(myId); const pos={lat:g.lat,lng:g.lng};
+    const m=new google.maps.Marker({position:pos,map:collMap,title:g.name, icon:mine?{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#e2231a',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}:undefined});
+    m.addListener('click',()=>{ collInfo.setContent('<b>'+esc(g.name)+'</b>'+(mine?' <span style="color:#e2231a">(vous)</span>':'')+'<br>'+esc(g.adr)+'<br><b>👷 </b>'+esc(techs.join(', '))); collInfo.open(collMap,m); });
+    collMap._markers.push(m); bounds.extend(pos); n++; });
   if(n){ collMap.fitBounds(bounds); google.maps.event.addListenerOnce(collMap,'idle',()=>{ if(collMap.getZoom()>15) collMap.setZoom(15); }); }
-  document.getElementById('collList').innerHTML=listRows.length?('<div style="font-weight:700;margin-bottom:4px">Chantiers / tâches du jour :</div>'+listRows.join('')):'<div style="color:var(--muted)">Aucun chantier ce jour.</div>';
+  else { mapEl.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Aucun chantier géolocalisé ce jour (voir la liste ci-dessous).</div>'; collMap=null; }
 }
 let chFilesTmp=[];
 function renderFilesInfo(){ const el=document.getElementById('chFilesInfo');
