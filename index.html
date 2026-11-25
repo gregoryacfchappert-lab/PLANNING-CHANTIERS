@@ -1050,19 +1050,32 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
   setupChAutocomplete();
   document.getElementById('chantierBg').classList.add('open'); }
 let chPlace={lat:null,lng:null};
-function setupChAutocomplete(){ const inp=document.getElementById('chAdresse'); if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse du chantier'; return; } inp.placeholder='Tapez l\'adresse (Google Maps)…';
-  loadGmaps().then(()=>{ if(inp._ac||!(window.google&&google.maps&&google.maps.places)) return; const ac=new google.maps.places.Autocomplete(inp,{fields:['formatted_address','geometry'],componentRestrictions:{country:'fr'}}); inp._ac=ac; ac.addListener('place_changed',()=>{ const p=ac.getPlace(); if(p&&p.formatted_address) inp.value=p.formatted_address; if(p&&p.geometry&&p.geometry.location){ chPlace.lat=p.geometry.location.lat(); chPlace.lng=p.geometry.location.lng(); } }); }).catch(()=>{}); }
+/* Autocomplétion via la nouvelle API Places (Places API New) */
+let _placesLib=null, _placesTok=null;
+async function placesLib(){ await loadGmaps(); if(!_placesLib){ _placesLib=await google.maps.importLibrary('places'); } return _placesLib; }
+function attachPlacesAutocomplete(inp, onPick){ if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse'; return; } inp.placeholder='Tapez l\'adresse…'; inp.setAttribute('autocomplete','off'); if(inp._pac) return; inp._pac=true;
+  let box=null, t=null;
+  function close(){ if(box){ box.remove(); box=null; } }
+  function show(sugs){ close(); if(!sugs||!sugs.length) return; const r=inp.getBoundingClientRect(); box=document.createElement('div'); box.style.cssText='position:absolute;z-index:4000;background:#fff;border:1px solid #c9d2e0;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);max-height:240px;overflow:auto;font-size:14px;width:'+r.width+'px;left:'+(r.left+window.scrollX)+'px;top:'+(r.bottom+window.scrollY+2)+'px';
+    sugs.forEach(s=>{ const pred=s.placePrediction; if(!pred) return; const d=document.createElement('div'); d.style.cssText='padding:9px 11px;cursor:pointer;border-bottom:1px solid #eef2f8'; d.textContent=pred.text?pred.text.text:''; d.onmouseover=()=>d.style.background='#eef4ff'; d.onmouseout=()=>d.style.background='#fff';
+      d.onmousedown=async(e)=>{ e.preventDefault(); inp.value=d.textContent; close(); try{ const place=pred.toPlace(); await place.fetchFields({fields:['formattedAddress','location']}); const loc=place.location; if(place.formattedAddress) inp.value=place.formattedAddress; onPick({address:inp.value, lat:loc?loc.lat():null, lng:loc?loc.lng():null}); }catch(err){ onPick({address:inp.value, lat:null, lng:null}); } };
+      box.appendChild(d); });
+    document.body.appendChild(box); }
+  inp.addEventListener('input',()=>{ clearTimeout(t); const q=inp.value.trim(); if(q.length<3){ close(); return; } t=setTimeout(async()=>{ try{ const lib=await placesLib(); if(!_placesTok) _placesTok=new lib.AutocompleteSessionToken(); const res=await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({input:q, sessionToken:_placesTok, includedRegionCodes:['fr']}); show(res&&res.suggestions||[]); }catch(e){ close(); } },280); });
+  inp.addEventListener('blur',()=>{ setTimeout(close,180); });
+}
+function setupChAutocomplete(){ attachPlacesAutocomplete(document.getElementById('chAdresse'), p=>{ chPlace.lat=p.lat; chPlace.lng=p.lng; }); }
+function geocodeChantier(ch){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!ch.adresse) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:ch.adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; const cc=db.chantiers.find(x=>x.id===ch.id); if(cc){ cc.lat=loc.lat(); cc.lng=loc.lng(); persist(); } } }); }).catch(()=>{}); }
 function geocodeChantier(ch){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!ch.adresse) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:ch.adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; const cc=db.chantiers.find(x=>x.id===ch.id); if(cc){ cc.lat=loc.lat(); cc.lng=loc.lng(); persist(); } } }); }).catch(()=>{}); }
 let taskPlace={lat:null,lng:null};
-function setupTaskAutocomplete(){ const inp=document.getElementById('taskAddr'); if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse de la tâche'; return; } inp.placeholder='Tapez l\'adresse (Google Maps)…';
-  loadGmaps().then(()=>{ if(inp._ac||!(window.google&&google.maps&&google.maps.places)) return; const ac=new google.maps.places.Autocomplete(inp,{fields:['formatted_address','geometry'],componentRestrictions:{country:'fr'}}); inp._ac=ac; ac.addListener('place_changed',()=>{ const p=ac.getPlace(); if(p&&p.formatted_address) inp.value=p.formatted_address; if(p&&p.geometry&&p.geometry.location){ taskPlace.lat=p.geometry.location.lat(); taskPlace.lng=p.geometry.location.lng(); } }); }).catch(()=>{}); }
+function setupTaskAutocomplete(){ attachPlacesAutocomplete(document.getElementById('taskAddr'), p=>{ taskPlace.lat=p.lat; taskPlace.lng=p.lng; }); }
 function geocodeGroup(gid, adresse){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!adresse||!gid) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; db.poses.forEach(p=>{ if(p.groupId===gid){ p.lat=loc.lat(); p.lng=loc.lng(); } }); persist(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); } }); }).catch(()=>{}); }
 /* ===== Google Maps : chargeur + carte collègues ===== */
 let _gmapsPromise=null;
 function loadGmaps(){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key) return Promise.reject('nokey');
   if(window.google&&window.google.maps&&window.google.maps.places) return Promise.resolve();
   if(_gmapsPromise) return _gmapsPromise;
-  _gmapsPromise=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=fr&region=FR'; s.async=true; s.defer=true; s.onload=()=>res(); s.onerror=()=>{ _gmapsPromise=null; rej('loaderror'); }; document.head.appendChild(s); });
+  _gmapsPromise=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=fr&region=FR&loading=async&v=weekly'; s.async=true; s.defer=true; s.onload=()=>res(); s.onerror=()=>{ _gmapsPromise=null; rej('loaderror'); }; document.head.appendChild(s); });
   return _gmapsPromise; }
 let collMap=null, collInfo=null;
 function openColleaguesMap(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionnez d\'abord votre nom en haut.'); return; }
