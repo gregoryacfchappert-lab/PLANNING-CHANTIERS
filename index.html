@@ -256,6 +256,7 @@
       <button id="monFicheBtn" class="primary small" style="flex:1" onclick="openFicheMob()">📝 Ma fiche de la semaine</button>
       <button class="ghost small" style="flex:0 0 auto;background:#fff" onclick="openMesFiches()">📂 Mes fiches</button>
     </div>
+    <button class="ghost small" style="width:100%;margin-top:8px;background:#fff" onclick="openColleaguesMap()">👥 Collègues à proximité</button>
   </div>
   <div id="monBody" class="mon-body"></div>
 </div>
@@ -435,6 +436,9 @@
       </div>
       <div class="mfield"><label>Adresse du dépôt (page technicien GitHub Pages)</label>
         <input id="pPages" onchange="saveParams()"></div>
+      <div class="mfield"><label>Clé API Google Maps (adresses + carte « Collègues à proximité »)</label>
+        <input id="pGmaps" placeholder="Collez votre clé Google Maps…" onchange="saveParams()">
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Activez les API « Maps JavaScript » et « Places » dans Google Cloud, puis collez la clé ici. Sans clé, l'adresse reste un champ texte simple.</div></div>
       <div class="mfield"><label>Couleurs des statuts du planning (Congé, Maladie, SAV, Entretien, Cours, Astreinte, Autre)</label>
         <div id="statutColorsBox" style="display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:4px"></div>
         <button class="ghost small" style="margin-top:8px" onclick="resetStatutColors()">↺ Réinitialiser les couleurs par défaut</button>
@@ -576,6 +580,15 @@
   <div id="qrBox" style="display:flex;justify-content:center;padding:10px"></div>
   <div id="qrLink" style="font-size:11px;color:var(--bleu);word-break:break-all;margin-top:6px"></div>
   <div class="modal-actions"><button onclick="copyShareLink()">🔗 Copier le lien</button><button class="primary" onclick="closeQR()">Fermer</button></div>
+</div></div>
+
+<!-- MODAL : collègues à proximité (carte Google Maps) -->
+<div class="modal-bg" id="collBg"><div class="modal" style="max-width:660px">
+  <h3>👥 Collègues à proximité</h3>
+  <div class="mfield"><label>Jour</label><input id="collDate" type="date" onchange="renderCollMap()"></div>
+  <div id="collMap" style="width:100%;height:360px;border:1px solid var(--bord);border-radius:10px;background:#eef2f8"></div>
+  <div id="collList" style="margin-top:10px;font-size:13px;max-height:150px;overflow:auto"></div>
+  <div class="modal-actions"><button class="primary" onclick="closeColleaguesMap()">Fermer</button></div>
 </div></div>
 
 <!-- MODAL : mes fiches (consultation technicien) -->
@@ -725,7 +738,7 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(DBKEY)); if(d&&d.c
     logo:DEFAULT_LOGO }; }
 function migr(d){ d.techniciens=d.techniciens||[]; d.commerciaux=d.commerciaux||[]; d.chantiers=d.chantiers||[]; d.poses=d.poses||[]; d.astreinteOrder=d.astreinteOrder||[];
   d.params=d.params||{}; if(d.params.matSem==null)d.params.matSem=4; if(d.params.hSem==null)d.params.hSem=39; if(d.params.hJour==null)d.params.hJour=8; if(d.params.hVendredi==null)d.params.hVendredi=7; if(d.params.congesMoy6==null)d.params.congesMoy6=0;
-  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(d.params.infoMsg==null)d.params.infoMsg=''; if(!d.logo)d.logo=DEFAULT_LOGO;
+  if(!d.params.pass)d.params.pass='Chappert1188@&!81'; if(d.params.pages==null)d.params.pages='https://gregoryacfchappert-lab.github.io/FICHES-CHANTIERS/'; if(d.params.infoMsg==null)d.params.infoMsg=''; if(d.params.gmapsKey==null)d.params.gmapsKey=''; if(!d.logo)d.logo=DEFAULT_LOGO;
   if(!d.fiches||typeof d.fiches!=='object') d.fiches={};
   d.chantiers.forEach(c=>{ if(!c.files) c.files = c.devisFile?[c.devisFile]:[]; if(c.repasExt==null) c.repasExt=false; if(c.lien==null) c.lien='';
     if(c.matEtat==null){ c.matEtat = c.matRecu ? 'recu' : ((c.materiel==='oui')?'cmd':'non'); }
@@ -1032,7 +1045,42 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
   chFilesTmp = (c&&c.files)? c.files.slice() : (c&&c.devisFile? [c.devisFile] : []); renderFilesInfo();
   chMoisTotal();
   document.getElementById('chDelBtn').style.display=c?'inline-flex':'none';
+  chPlace={lat:(c&&c.lat!=null)?c.lat:null, lng:(c&&c.lng!=null)?c.lng:null};
+  setupChAutocomplete();
   document.getElementById('chantierBg').classList.add('open'); }
+let chPlace={lat:null,lng:null};
+function setupChAutocomplete(){ const inp=document.getElementById('chAdresse'); if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse du chantier'; return; } inp.placeholder='Tapez l\'adresse (Google Maps)…';
+  loadGmaps().then(()=>{ if(inp._ac||!(window.google&&google.maps&&google.maps.places)) return; const ac=new google.maps.places.Autocomplete(inp,{fields:['formatted_address','geometry'],componentRestrictions:{country:'fr'}}); inp._ac=ac; ac.addListener('place_changed',()=>{ const p=ac.getPlace(); if(p&&p.formatted_address) inp.value=p.formatted_address; if(p&&p.geometry&&p.geometry.location){ chPlace.lat=p.geometry.location.lat(); chPlace.lng=p.geometry.location.lng(); } }); }).catch(()=>{}); }
+function geocodeChantier(ch){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!ch.adresse) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:ch.adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; const cc=db.chantiers.find(x=>x.id===ch.id); if(cc){ cc.lat=loc.lat(); cc.lng=loc.lng(); persist(); } } }); }).catch(()=>{}); }
+/* ===== Google Maps : chargeur + carte collègues ===== */
+let _gmapsPromise=null;
+function loadGmaps(){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key) return Promise.reject('nokey');
+  if(window.google&&window.google.maps&&window.google.maps.places) return Promise.resolve();
+  if(_gmapsPromise) return _gmapsPromise;
+  _gmapsPromise=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=fr&region=FR'; s.async=true; s.defer=true; s.onload=()=>res(); s.onerror=()=>{ _gmapsPromise=null; rej('loaderror'); }; document.head.appendChild(s); });
+  return _gmapsPromise; }
+let collMap=null, collInfo=null;
+function openColleaguesMap(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionnez d\'abord votre nom en haut.'); return; }
+  document.getElementById('collBg').classList.add('open'); document.getElementById('collDate').value=ymd(new Date());
+  const key=(db.params&&db.params.gmapsKey||'').trim();
+  if(!key){ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Carte non configurée.<br>Le responsable doit ajouter la clé Google Maps dans les Paramètres.</div>'; document.getElementById('collList').innerHTML=''; return; }
+  document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Chargement de la carte…</div>';
+  loadGmaps().then(()=>{ collMap=null; renderCollMap(); }).catch(()=>{ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--rouge)">Impossible de charger la carte (clé invalide ou pas de connexion).</div>'; }); }
+function closeColleaguesMap(){ document.getElementById('collBg').classList.remove('open'); }
+function renderCollMap(){ if(!(window.google&&google.maps)) return; const ds=document.getElementById('collDate').value||ymd(new Date()); const myId=ficheMyId();
+  const poses=db.poses.filter(p=>p.type==='chantier'&&p.chantierId&&p.date===ds);
+  const byCh={}; poses.forEach(p=>{ (byCh[p.chantierId]=byCh[p.chantierId]||[]).push(p.techId); });
+  const mapEl=document.getElementById('collMap'); if(!collMap){ mapEl.innerHTML=''; collMap=new google.maps.Map(mapEl,{center:{lat:43.9277,lng:2.1478},zoom:9,mapTypeControl:false,streetViewControl:false,fullscreenControl:false}); collInfo=new google.maps.InfoWindow(); }
+  if(collMap._markers) collMap._markers.forEach(m=>m.setMap(null)); collMap._markers=[];
+  const bounds=new google.maps.LatLngBounds(); let n=0; const listRows=[];
+  Object.keys(byCh).forEach(cid=>{ const ch=db.chantiers.find(c=>c.id===cid); if(!ch) return; const techs=[...new Set(byCh[cid])].map(id=>techName(id)).filter(Boolean); const mine=byCh[cid].includes(myId);
+    if(ch.lat!=null&&ch.lng!=null){ const pos={lat:ch.lat,lng:ch.lng}; const m=new google.maps.Marker({position:pos,map:collMap,title:ch.client, icon:mine?{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#e2231a',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}:undefined});
+      m.addListener('click',()=>{ collInfo.setContent('<b>'+esc(ch.client)+'</b>'+(mine?' <span style="color:#e2231a">(vous)</span>':'')+'<br>'+esc(ch.adresse||'')+'<br><b>👷 </b>'+esc(techs.join(', '))); collInfo.open(collMap,m); });
+      collMap._markers.push(m); bounds.extend(pos); n++; listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord)">'+(mine?'📍 ':'• ')+'<b>'+esc(ch.client)+'</b> — '+esc(techs.join(', '))+'</div>'); }
+    else { listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord);color:var(--muted)">• '+esc(ch.client)+' — '+esc(techs.join(', '))+' <span style="font-size:11px">(adresse non géolocalisée)</span></div>'); } });
+  if(n){ collMap.fitBounds(bounds); google.maps.event.addListenerOnce(collMap,'idle',()=>{ if(collMap.getZoom()>15) collMap.setZoom(15); }); }
+  document.getElementById('collList').innerHTML=listRows.length?('<div style="font-weight:700;margin-bottom:4px">Chantiers du jour :</div>'+listRows.join('')):'<div style="color:var(--muted)">Aucun chantier ce jour.</div>';
+}
 let chFilesTmp=[];
 function renderFilesInfo(){ const el=document.getElementById('chFilesInfo');
   el.innerHTML = chFilesTmp.length ? chFilesTmp.map((f,i)=>`<span><a href="${f.data}" download="${esc(f.name)}" target="_blank" style="color:var(--bleu)">${esc(f.name)}</a> <button class="small rouge" onclick="removeFile(${i})">×</button></span>`).join('') : '<span style="color:var(--muted)">Aucun fichier</span>'; }
@@ -1051,6 +1099,7 @@ function saveChantier(){
     adresse:val('chAdresse').trim(), tel:val('chTel').trim(), nbTechs:Math.max(1,parseInt(val('chNbTech'))||1), moisHeures, heures:Object.values(moisHeures).reduce((s,h)=>s+h,0),
     techIds:[...document.querySelectorAll('#chTechs .chtk:checked')].map(x=>x.value), matEtat:val('chMat'), materiel:(val('chMat')==='non'?'non':'oui'), matRecep:val('chMatRecep'), prio:val('chPrio'), desc:val('chDesc').trim(),
     lien:val('chLien').trim(), repasExt:document.getElementById('chRepas').checked, files:chFilesTmp.slice(), devisFile:chFilesTmp[0]||null, poseDate:val('chPoseDate') };
+  if(chPlace.lat!=null&&chPlace.lng!=null){ c.lat=chPlace.lat; c.lng=chPlace.lng; } else if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); if(ex){ if(ex.adresse===c.adresse){ if(ex.lat!=null)c.lat=ex.lat; if(ex.lng!=null)c.lng=ex.lng; } } }
   if(!c.client){ alert('Indiquez le client / chantier.'); return; }
   if(editChId){ const ex=db.chantiers.find(x=>x.id===editChId); c.ref=ex.ref; c.statut=ex.statut||'previsionnel'; const i=db.chantiers.findIndex(x=>x.id===editChId); db.chantiers[i]=c; }
   else { c.ref=nextRef(); c.statut='previsionnel'; db.chantiers.push(c); }
@@ -1060,6 +1109,7 @@ function saveChantier(){
   if(document.getElementById('view-planning').classList.contains('active')) renderPlanning();
   if(document.getElementById('view-prev').classList.contains('active')) renderPrev();
   toast('Chantier enregistré','ok');
+  if(c.adresse && (c.lat==null||c.lng==null)) geocodeChantier(c);
   if(crIds.length) setTimeout(()=>askCreneauFor(crIds),120);
 }
 function deleteChantier(){ if(!editChId) return; if(!confirm('Supprimer ce chantier ?')) return; db.chantiers=db.chantiers.filter(x=>x.id!==editChId); db.poses=db.poses.filter(p=>p.chantierId!==editChId); persist(); closeChantier(); renderChantiers(); updateBadges(); }
@@ -1898,7 +1948,7 @@ table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dc
 <div style="text-align:center;color:#66707e;font-size:11px;margin-top:12px">SAS ACF CHAPPERT</div></div></body></html>`; }
 
 /* ===== Paramètres / sauvegarde ===== */
-function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pHVendredi',db.params.hVendredi!=null?db.params.hVendredi:7); v('pPages',db.params.pages||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
+function renderParams(){ v('pMatSem',db.params.matSem); v('pHSem',db.params.hSem); v('pHJour',db.params.hJour||8); v('pHVendredi',db.params.hVendredi!=null?db.params.hVendredi:7); v('pPages',db.params.pages||''); v('pGmaps',db.params.gmapsKey||''); document.getElementById('logoPrev').src=logoData; renderStatutColors(); }
 function renderStatutColors(){ const box=document.getElementById('statutColorsBox'); if(!box) return;
   const cw='style="width:36px;height:28px;padding:0;border:1px solid var(--bord);border-radius:6px;cursor:pointer"'; const lw='style="display:inline-flex;align-items:center;gap:6px;font-size:13px"';
   box.innerHTML=`<label ${lw}><input type="color" value="${chDefaultColor()}" onchange="setChColorDefault(this.value)" ${cw}>Chantier sans commercial</label>`+
@@ -1907,7 +1957,7 @@ function setStatutColor(type,value){ db.params.statutColors=db.params.statutColo
 function setChColorDefault(value){ db.params.chColorDefault=value; persist(); refreshStatutViews(); }
 function resetStatutColors(){ db.params.statutColors={}; db.params.chColorDefault=''; persist(); renderStatutColors(); refreshStatutViews(); }
 function refreshStatutViews(){ if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); if(document.getElementById('view-plantech').classList.contains('active')) renderPlanTech(); }
-function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.hVendredi=(val('pHVendredi')===''?7:parseFloat(val('pHVendredi'))); db.params.pages=val('pPages'); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
+function saveParams(){ db.params.matSem=parseInt(val('pMatSem'))||0; db.params.hSem=parseInt(val('pHSem'))||39; db.params.hJour=parseFloat(val('pHJour'))||8; db.params.hVendredi=(val('pHVendredi')===''?7:parseFloat(val('pHVendredi'))); db.params.pages=val('pPages'); db.params.gmapsKey=val('pGmaps').trim(); persist(); updateBadges(); if(document.getElementById('view-propo').classList.contains('active')) renderPropo(); if(document.getElementById('view-prev').classList.contains('active')) renderPrev(); }
 function setLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ logoData=ev.target.result; db.logo=logoData; document.getElementById('logoPrev').src=logoData; persist(); }; r.readAsDataURL(f); }
 function exportData(){ const blob=new Blob([JSON.stringify(db)],{type:'application/json;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acf-planning-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
 function importData(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{ e.target.value=''; let o; try{o=JSON.parse(ev.target.result);}catch(err){ alert('JSON illisible.'); return; }
