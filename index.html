@@ -646,6 +646,7 @@
   <h3>Modifier la tâche</h3>
   <div class="mfield"><label>Tâche</label><div id="taskName" style="font-weight:700"></div></div>
   <div class="mfield" id="taskLabelRow" style="display:none"><label>Nom de la tâche (modifiable)</label><input id="taskLabel" placeholder="Nom du chantier / tâche…"></div>
+  <div class="mfield" id="taskAddrRow" style="display:none"><label>📍 Adresse (pour la carte « Collègues à proximité »)</label><input id="taskAddr" placeholder="Adresse de la tâche…"></div>
   <button id="taskFicheBtn" class="ghost" style="display:none;margin-bottom:12px" onclick="editFicheFromTask()">✎ Modifier la fiche chantier</button>
   <button id="taskConvertBtn" class="ghost" style="display:none;margin-bottom:12px" onclick="convertToChantier()">↦ Transformer en chantier libre</button>
   <div class="mrow">
@@ -1052,6 +1053,10 @@ let chPlace={lat:null,lng:null};
 function setupChAutocomplete(){ const inp=document.getElementById('chAdresse'); if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse du chantier'; return; } inp.placeholder='Tapez l\'adresse (Google Maps)…';
   loadGmaps().then(()=>{ if(inp._ac||!(window.google&&google.maps&&google.maps.places)) return; const ac=new google.maps.places.Autocomplete(inp,{fields:['formatted_address','geometry'],componentRestrictions:{country:'fr'}}); inp._ac=ac; ac.addListener('place_changed',()=>{ const p=ac.getPlace(); if(p&&p.formatted_address) inp.value=p.formatted_address; if(p&&p.geometry&&p.geometry.location){ chPlace.lat=p.geometry.location.lat(); chPlace.lng=p.geometry.location.lng(); } }); }).catch(()=>{}); }
 function geocodeChantier(ch){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!ch.adresse) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:ch.adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; const cc=db.chantiers.find(x=>x.id===ch.id); if(cc){ cc.lat=loc.lat(); cc.lng=loc.lng(); persist(); } } }); }).catch(()=>{}); }
+let taskPlace={lat:null,lng:null};
+function setupTaskAutocomplete(){ const inp=document.getElementById('taskAddr'); if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse de la tâche'; return; } inp.placeholder='Tapez l\'adresse (Google Maps)…';
+  loadGmaps().then(()=>{ if(inp._ac||!(window.google&&google.maps&&google.maps.places)) return; const ac=new google.maps.places.Autocomplete(inp,{fields:['formatted_address','geometry'],componentRestrictions:{country:'fr'}}); inp._ac=ac; ac.addListener('place_changed',()=>{ const p=ac.getPlace(); if(p&&p.formatted_address) inp.value=p.formatted_address; if(p&&p.geometry&&p.geometry.location){ taskPlace.lat=p.geometry.location.lat(); taskPlace.lng=p.geometry.location.lng(); } }); }).catch(()=>{}); }
+function geocodeGroup(gid, adresse){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key||!adresse||!gid) return; loadGmaps().then(()=>{ if(!(window.google&&google.maps)) return; new google.maps.Geocoder().geocode({address:adresse,region:'fr'},(res,status)=>{ if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; db.poses.forEach(p=>{ if(p.groupId===gid){ p.lat=loc.lat(); p.lng=loc.lng(); } }); persist(); if(document.getElementById('view-planning').classList.contains('active')) renderPlanning(); } }); }).catch(()=>{}); }
 /* ===== Google Maps : chargeur + carte collègues ===== */
 let _gmapsPromise=null;
 function loadGmaps(){ const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key) return Promise.reject('nokey');
@@ -1068,18 +1073,19 @@ function openColleaguesMap(){ const myId=ficheMyId(); if(!myId){ alert('Sélecti
   loadGmaps().then(()=>{ collMap=null; renderCollMap(); }).catch(()=>{ document.getElementById('collMap').innerHTML='<div style="padding:24px;text-align:center;color:var(--rouge)">Impossible de charger la carte (clé invalide ou pas de connexion).</div>'; }); }
 function closeColleaguesMap(){ document.getElementById('collBg').classList.remove('open'); }
 function renderCollMap(){ if(!(window.google&&google.maps)) return; const ds=document.getElementById('collDate').value||ymd(new Date()); const myId=ficheMyId();
-  const poses=db.poses.filter(p=>p.type==='chantier'&&p.chantierId&&p.date===ds);
-  const byCh={}; poses.forEach(p=>{ (byCh[p.chantierId]=byCh[p.chantierId]||[]).push(p.techId); });
+  const poses=db.poses.filter(p=>p.type==='chantier'&&p.date===ds);
+  const groups={}; poses.forEach(p=>{ const key=p.chantierId?('C:'+p.chantierId):('L:'+(p.groupId||p.label||p.id)); if(!groups[key]) groups[key]={techs:[],sample:p,chantierId:p.chantierId||''}; groups[key].techs.push(p.techId); });
   const mapEl=document.getElementById('collMap'); if(!collMap){ mapEl.innerHTML=''; collMap=new google.maps.Map(mapEl,{center:{lat:43.9277,lng:2.1478},zoom:9,mapTypeControl:false,streetViewControl:false,fullscreenControl:false}); collInfo=new google.maps.InfoWindow(); }
   if(collMap._markers) collMap._markers.forEach(m=>m.setMap(null)); collMap._markers=[];
   const bounds=new google.maps.LatLngBounds(); let n=0; const listRows=[];
-  Object.keys(byCh).forEach(cid=>{ const ch=db.chantiers.find(c=>c.id===cid); if(!ch) return; const techs=[...new Set(byCh[cid])].map(id=>techName(id)).filter(Boolean); const mine=byCh[cid].includes(myId);
-    if(ch.lat!=null&&ch.lng!=null){ const pos={lat:ch.lat,lng:ch.lng}; const m=new google.maps.Marker({position:pos,map:collMap,title:ch.client, icon:mine?{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#e2231a',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}:undefined});
-      m.addListener('click',()=>{ collInfo.setContent('<b>'+esc(ch.client)+'</b>'+(mine?' <span style="color:#e2231a">(vous)</span>':'')+'<br>'+esc(ch.adresse||'')+'<br><b>👷 </b>'+esc(techs.join(', '))); collInfo.open(collMap,m); });
-      collMap._markers.push(m); bounds.extend(pos); n++; listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord)">'+(mine?'📍 ':'• ')+'<b>'+esc(ch.client)+'</b> — '+esc(techs.join(', '))+'</div>'); }
-    else { listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord);color:var(--muted)">• '+esc(ch.client)+' — '+esc(techs.join(', '))+' <span style="font-size:11px">(adresse non géolocalisée)</span></div>'); } });
+  Object.values(groups).forEach(g=>{ let lat,lng,name,adr; if(g.chantierId){ const ch=db.chantiers.find(c=>c.id===g.chantierId); if(!ch) return; lat=ch.lat; lng=ch.lng; name=ch.client; adr=ch.adresse||''; } else { lat=g.sample.lat; lng=g.sample.lng; name=g.sample.label||'Tâche'; adr=g.sample.adresse||''; }
+    const techs=[...new Set(g.techs)].map(id=>techName(id)).filter(Boolean); const mine=g.techs.includes(myId);
+    if(lat!=null&&lng!=null){ const pos={lat:lat,lng:lng}; const m=new google.maps.Marker({position:pos,map:collMap,title:name, icon:mine?{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#e2231a',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}:undefined});
+      m.addListener('click',()=>{ collInfo.setContent('<b>'+esc(name)+'</b>'+(mine?' <span style="color:#e2231a">(vous)</span>':'')+'<br>'+esc(adr)+'<br><b>👷 </b>'+esc(techs.join(', '))); collInfo.open(collMap,m); });
+      collMap._markers.push(m); bounds.extend(pos); n++; listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord)">'+(mine?'📍 ':'• ')+'<b>'+esc(name)+'</b> — '+esc(techs.join(', '))+'</div>'); }
+    else { listRows.push('<div style="padding:5px 0;border-bottom:1px solid var(--bord);color:var(--muted)">• '+esc(name)+' — '+esc(techs.join(', '))+' <span style="font-size:11px">(adresse non géolocalisée)</span></div>'); } });
   if(n){ collMap.fitBounds(bounds); google.maps.event.addListenerOnce(collMap,'idle',()=>{ if(collMap.getZoom()>15) collMap.setZoom(15); }); }
-  document.getElementById('collList').innerHTML=listRows.length?('<div style="font-weight:700;margin-bottom:4px">Chantiers du jour :</div>'+listRows.join('')):'<div style="color:var(--muted)">Aucun chantier ce jour.</div>';
+  document.getElementById('collList').innerHTML=listRows.length?('<div style="font-weight:700;margin-bottom:4px">Chantiers / tâches du jour :</div>'+listRows.join('')):'<div style="color:var(--muted)">Aucun chantier ce jour.</div>';
 }
 let chFilesTmp=[];
 function renderFilesInfo(){ const el=document.getElementById('chFilesInfo');
@@ -1752,13 +1758,14 @@ function poseClick(id){ const p=db.poses.find(x=>x.id===id); if(!p) return;
 function blockFilter(ctx){ if(ctx.chantierId) return p=>p.type==='chantier'&&p.chantierId===ctx.chantierId&&p.techId===ctx.techId;
   if(ctx.groupId) return p=>p.groupId===ctx.groupId; return p=>p.id===ctx.id; }
 let taskCtx=null;
-function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||'',repasExt:!!p.repasExt,creneau:p.creneau||''};
+function openTask(p){ taskCtx={id:p.id,type:p.type,chantierId:p.chantierId||'',groupId:p.groupId||'',techId:p.techId,date:p.date,label:p.label||'',commercialId:p.commercialId||'',repasExt:!!p.repasExt,creneau:p.creneau||'',adresse:p.adresse||'',lat:(p.lat!=null?p.lat:null),lng:(p.lng!=null?p.lng:null)};
   const fwd=db.poses.filter(blockFilter(taskCtx)).filter(x=>x.date>=p.date).length;
   document.getElementById('taskName').textContent=poseLabel(p)+' — '+( {chantier:'Chantier'}[p.type]||(POSE_STATUS[p.type]||{}).label||p.type );
   v('taskDate',p.date); v('taskDuree',Math.max(1,fwd)); v('taskNote',p.note||'');
   document.getElementById('taskTech').innerHTML=db.techniciens.map(t=>`<option value="${t.id}" ${t.id===p.techId?'selected':''}>${esc(t.nom)}</option>`).join('');
   const isLabelCh=(p.type==='chantier'&&!p.chantierId);
   document.getElementById('taskLabelRow').style.display=isLabelCh?'block':'none'; if(isLabelCh) v('taskLabel',p.label||'');
+  document.getElementById('taskAddrRow').style.display=isLabelCh?'block':'none'; taskPlace={lat:(p.lat!=null?p.lat:null),lng:(p.lng!=null?p.lng:null)}; if(isLabelCh){ v('taskAddr',p.adresse||''); setupTaskAutocomplete(); }
   const cr=document.getElementById('taskComRow'); cr.style.display=isLabelCh?'block':'none';
   if(isLabelCh) document.getElementById('taskCom').innerHTML='<option value="">— Sans commercial</option>'+db.commerciaux.map(c=>`<option value="${c.id}" ${c.id===(p.commercialId||'')?'selected':''}>${esc(c.nom)}</option>`).join('');
   document.getElementById('taskRepasRow').style.display=(p.type==='chantier')?'block':'none';
@@ -1794,7 +1801,7 @@ function editFicheFromTask(){ const id=taskCtx&&taskCtx.chantierId; if(!id) retu
 function closeTask(){ document.getElementById('taskBg').classList.remove('open'); }
 function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDate'); const N=Math.max(1,parseInt(val('taskDuree'))||1); const techId=val('taskTech'); const note=val('taskNote').trim();
   if(!start||!techId){ alert('Date et technicien requis.'); return; }
-  if(ctx.type==='chantier'&&!ctx.chantierId){ const nl=val('taskLabel').trim(); if(nl) ctx.label=nl; ctx.commercialId=val('taskCom')||''; }
+  if(ctx.type==='chantier'&&!ctx.chantierId){ const nl=val('taskLabel').trim(); if(nl) ctx.label=nl; ctx.commercialId=val('taskCom')||''; ctx.adresse=val('taskAddr').trim(); if(taskPlace.lat!=null&&taskPlace.lng!=null){ ctx.lat=taskPlace.lat; ctx.lng=taskPlace.lng; } }
   if(ctx.type==='chantier'){ ctx.repasExt=document.getElementById('taskRepas').checked; ctx.creneau=val('taskCreneau').trim(); }
   // retire la partie du bloc à partir de la date cliquée
   db.poses=db.poses.filter(p=>!(blockFilter(ctx)(p)&&p.date>=ctx.date));
@@ -1802,15 +1809,16 @@ function saveTask(){ const ctx=taskCtx; if(!ctx) return; const start=val('taskDa
   let cur=new Date(start+'T00:00:00'), placed=0;
   while(placed<N){ const w=cur.getDay(); if(w>=1&&w<=5){ const d2=ymd(cur); // jours ouvrés : lundi→vendredi (hors week-end)
       const dup=db.poses.some(p=>p.type===ctx.type&&p.date===d2&&p.techId===techId&&(ctx.chantierId?p.chantierId===ctx.chantierId:p.groupId===gid));
-      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; } if(ctx.type==='chantier'&&ctx.repasExt) np.repasExt=true; if(ctx.type==='chantier'&&ctx.creneau) np.creneau=ctx.creneau; db.poses.push(np); }
+      if(!dup){ const np={id:uid(),type:ctx.type,date:d2,techId,note}; if(ctx.chantierId) np.chantierId=ctx.chantierId; else { np.groupId=gid; if(ctx.label) np.label=ctx.label; if(ctx.commercialId) np.commercialId=ctx.commercialId; if(ctx.adresse){ np.adresse=ctx.adresse; if(ctx.lat!=null){ np.lat=ctx.lat; np.lng=ctx.lng; } } } if(ctx.type==='chantier'&&ctx.repasExt) np.repasExt=true; if(ctx.type==='chantier'&&ctx.creneau) np.creneau=ctx.creneau; db.poses.push(np); }
       placed++; }
     cur.setDate(cur.getDate()+1); }
   if(ctx.chantierId){ const ch=db.chantiers.find(c=>c.id===ctx.chantierId); if(ch) ch.statut='planifie'; }
   /* Renommage : appliquer le nouveau nom à tout le bloc (y compris jours avant la date éditée) */
-  if(ctx.type==='chantier' && !ctx.chantierId){ db.poses.forEach(p=>{ if(p.type==='chantier' && !p.chantierId && p.groupId===gid) p.label=ctx.label; }); }
+  if(ctx.type==='chantier' && !ctx.chantierId){ db.poses.forEach(p=>{ if(p.type==='chantier' && !p.chantierId && p.groupId===gid){ p.label=ctx.label; if(ctx.adresse){ p.adresse=ctx.adresse; if(ctx.lat!=null){ p.lat=ctx.lat; p.lng=ctx.lng; } else { delete p.lat; delete p.lng; } } else { delete p.adresse; delete p.lat; delete p.lng; } } }); }
   /* Repas : propager à toutes les cases portant le même libellé */
   if(ctx.type==='chantier' && !ctx.chantierId && ctx.label){ db.poses.forEach(p=>{ if(p.type==='chantier'&&!p.chantierId&&(p.label||'')===ctx.label){ if(ctx.repasExt) p.repasExt=true; else delete p.repasExt; } }); }
-  persist(); closeTask(); renderPlanning(); }
+  persist(); closeTask(); renderPlanning();
+  if(ctx.type==='chantier' && !ctx.chantierId && ctx.adresse && ctx.lat==null) geocodeGroup(gid, ctx.adresse); }
 function deleteTask(){ const ctx=taskCtx; if(!ctx) return; if(!confirm('Supprimer cette tâche ?')) return;
   db.poses=db.poses.filter(p=>!blockFilter(ctx)(p));
   let ask=null;
