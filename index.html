@@ -1052,7 +1052,7 @@ function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(
 let chPlace={lat:null,lng:null};
 /* Autocomplétion via la nouvelle API Places (Places API New) */
 let _placesLib=null, _placesTok=null;
-async function placesLib(){ await loadGmaps(); if(!_placesLib){ _placesLib=await google.maps.importLibrary('places'); } return _placesLib; }
+async function placesLib(){ await loadGmaps(); if(google.maps.places&&google.maps.places.AutocompleteSuggestion) return google.maps.places; if(google.maps.importLibrary){ _placesLib=await google.maps.importLibrary('places'); return _placesLib; } return google.maps.places; }
 function attachPlacesAutocomplete(inp, onPick){ if(!inp) return; const key=(db.params&&db.params.gmapsKey||'').trim(); if(!key){ inp.placeholder='Adresse'; return; } inp.placeholder='Tapez l\'adresse…'; inp.setAttribute('autocomplete','off'); if(inp._pac) return; inp._pac=true;
   let box=null, t=null;
   function close(){ if(box){ box.remove(); box=null; } }
