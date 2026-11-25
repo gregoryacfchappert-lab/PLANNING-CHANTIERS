@@ -216,6 +216,7 @@
   <button class="navlink" id="nav-tech" onclick="showView('tech')">👷 Techniciens</button>
   <button class="navlink" id="nav-com" onclick="showView('com')">🧑‍💼 Commerciaux</button>
   <button class="navlink" id="nav-fiches" onclick="showView('fiches')">🧾 Fiches techniciens</button>
+  <button class="navlink" id="nav-archive" onclick="showView('archive')">🗄 Archive</button>
   <button class="navlink" id="nav-params" onclick="showView('params')">⚙ Paramètres</button>
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
@@ -395,6 +396,27 @@
     <div id="fichesWrap"></div>
   </div>
 </div>
+
+<!-- VUE ARCHIVE -->
+<div class="view" id="view-archive">
+  <div class="wrap wrap-full">
+    <h2 class="page-h">Archive des chantiers</h2>
+    <p class="sub">Chantiers terminés ou sortis de la liste, classés par mois de réalisation (dernière date planifiée), avec comparaison heures prévues / planifiées et techniciens assignés.</p>
+    <div class="bar"><div class="search"><input id="searchArchive" placeholder="Rechercher par client ou réf…" oninput="renderArchive()"></div></div>
+    <div id="archiveWrap"></div>
+  </div>
+</div>
+
+<!-- DIALOGUE : supprimer / terminer un chantier -->
+<div class="modal-bg" id="delChBg"><div class="modal" style="max-width:460px">
+  <h3>Chantier</h3>
+  <div id="delChMsg" style="margin-bottom:12px;font-size:15px"></div>
+  <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+    <button onclick="delChClose()">Annuler</button>
+    <button class="primary" onclick="delChTerminer()">✅ Mettre en terminé</button>
+    <button style="background:var(--rouge);color:#fff;border:none" onclick="delChSupprimer()">🗑 Supprimer définitivement</button>
+  </div>
+</div></div>
 
 <!-- VUE PARAMÈTRES -->
 <div class="view" id="view-params">
@@ -728,7 +750,7 @@ const _urlTech=(new URLSearchParams(location.search)).get('tech');
 const techLinkMode=!!_urlTech;
 const techShareMode=!techLinkMode && !!(new URLSearchParams(location.search)).get('mob');
 const mobOnly=techLinkMode||techShareMode;
-function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,fiches:renderFiches,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
+function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,fiches:renderFiches,archive:renderArchive,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
@@ -748,7 +770,7 @@ function onSignedIn(u){
     const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
     if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
     else { migr(db); pushAll(); }
-    cloudOn=true; persistLocal(); setSyncStatus('ok'); if(mobOnly) showView('mon'); else showView(canEdit?'dash':'plantech');
+    cloudOn=true; persistLocal(); try{ autoFinishPastChantiers(); }catch(e){} setSyncStatus('ok'); if(mobOnly) showView('mon'); else showView(canEdit?'dash':'plantech');
     CLOUD_KEYS.forEach(k=>{
       fbDb.ref('db/'+k).on('value', s=>{
         const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
@@ -798,9 +820,9 @@ let adminUnlocked=false;
 function showView(v){
   if(mobOnly) v='mon';
   currentView=v;
-  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','fiches','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
+  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','fiches','archive','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
   document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
-  ['dash','planning','chantiers','prev','propo','tech','com','fiches','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
+  ['dash','planning','chantiers','prev','propo','tech','com','fiches','archive','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
   if(v==='dash') renderDash();
   if(v==='mon') renderMon();
   if(v==='planning') renderPlanning();
@@ -811,6 +833,7 @@ function showView(v){
   if(v==='tech') renderTech();
   if(v==='com') renderCom();
   if(v==='fiches') renderFiches();
+  if(v==='archive') renderArchive();
   if(v==='params') renderParams();
   updateBadges(); window.scrollTo(0,0);
 }
@@ -964,7 +987,35 @@ function renderChantiers(){
         <button class="small rouge" onclick="delChantierRow('${c.id}')">🗑</button></td></tr>`;
     }).join('')+'</tbody></table>';
 }
-function delChantierRow(id){ if(!confirm('Supprimer ce chantier ? (ses tâches planifiées seront retirées)')) return; db.chantiers=db.chantiers.filter(x=>x.id!==id); db.poses=db.poses.filter(p=>p.chantierId!==id); persist(); renderChantiers(); updateBadges(); }
+let delChId=null;
+function delChantierRow(id){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; delChId=id;
+  document.getElementById('delChMsg').innerHTML='Chantier « <b>'+esc(c.client)+'</b> » ('+esc(c.ref)+') — que voulez-vous faire ?<br><span style="font-size:12px;color:var(--muted)">« Mettre en terminé » le classe dans l\'Archive (conserve chantiers, heures et techniciens). « Supprimer » l\'efface définitivement avec ses tâches planifiées.</span>';
+  document.getElementById('delChBg').classList.add('open'); }
+function delChClose(){ document.getElementById('delChBg').classList.remove('open'); delChId=null; }
+function delChTerminer(){ const c=db.chantiers.find(x=>x.id===delChId); if(c){ c.statut='termine'; persist(); } delChClose(); renderChantiers(); updateBadges(); toast('Chantier mis en terminé (archivé)','ok'); }
+function delChSupprimer(){ if(!delChId) return; const c=db.chantiers.find(x=>x.id===delChId); if(!confirm('Supprimer DÉFINITIVEMENT « '+((c&&c.client)||'ce chantier')+' » et ses tâches planifiées ?\nCette action est irréversible.')) return; db.chantiers=db.chantiers.filter(x=>x.id!==delChId); db.poses=db.poses.filter(p=>p.chantierId!==delChId); persist(); delChClose(); renderChantiers(); updateBadges(); toast('Chantier supprimé','ok'); }
+/* ===== Archive ===== */
+function chChantierPoses(ch){ return db.poses.filter(p=>p.type==='chantier'&&p.chantierId===ch.id); }
+function chLastPlanDate(ch){ const ds=chChantierPoses(ch).map(p=>p.date).filter(Boolean).sort(); return ds.length?ds[ds.length-1]:''; }
+function chPlannedHours(ch){ return Math.round(chChantierPoses(ch).reduce((s,p)=>s+hoursForDateStr(p.date),0)*10)/10; }
+function chAssignedTechNames(ch){ const ids=[...new Set(chChantierPoses(ch).map(p=>p.techId))]; let names=ids.map(id=>techName(id)).filter(Boolean); if(!names.length && ch.techIds) names=ch.techIds.map(id=>techName(id)).filter(Boolean); return names; }
+function autoFinishPastChantiers(){ const today=ymd(new Date()); let changed=false;
+  db.chantiers.forEach(c=>{ if(c.statut==='termine') return; const dates=db.poses.filter(p=>p.type==='chantier'&&p.chantierId===c.id).map(p=>p.date).filter(Boolean); if(!dates.length) return; const last=dates.sort().slice(-1)[0]; if(last<today){ c.statut='termine'; changed=true; } });
+  if(changed && canEdit) persist(); return changed; }
+function archiveReactiver(id){ const c=db.chantiers.find(x=>x.id===id); if(!c) return; if(!confirm('Réactiver « '+c.client+' » et le remettre dans la liste des chantiers à planifier ?')) return; c.statut='previsionnel'; c.horsListe=false; persist(); renderArchive(); updateBadges(); toast('Chantier réactivé','ok'); }
+function renderArchive(){ autoFinishPastChantiers();
+  const wrap=document.getElementById('archiveWrap'); if(!wrap) return;
+  const q=(document.getElementById('searchArchive').value||'').toLowerCase();
+  const arch=db.chantiers.filter(c=>(c.statut==='termine'||c.horsListe)&&(!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)));
+  if(!arch.length){ wrap.innerHTML='<div class="empty">Aucun chantier archivé'+(q?' pour cette recherche.':' pour l\'instant. Les chantiers terminés ou sortis de la liste apparaîtront ici.')+'</div>'; return; }
+  const byMonth={}; arch.forEach(c=>{ const ld=chLastPlanDate(c); const mk=ld?ld.slice(0,7):'sansdate'; (byMonth[mk]=byMonth[mk]||[]).push(c); });
+  const months=Object.keys(byMonth).sort().reverse(); let html='';
+  months.forEach(mk=>{ const items=byMonth[mk].sort((a,b)=>chLastPlanDate(b).localeCompare(chLastPlanDate(a))); const lbl=mk==='sansdate'?'Sans date de planification':capFirst(monthLabel(mk)); let tPrev=0,tPlan=0;
+    const rows=items.map(c=>{ const prev=chHoursTotal(c); const plan=chPlannedHours(c); tPrev+=prev; tPlan+=plan; const ecart=Math.round((plan-prev)*10)/10; const techs=chAssignedTechNames(c); const ld=chLastPlanDate(c); const ec=ecart>0?'#b45309':(ecart<0?'#1a7f3c':'#64748b');
+      return '<tr><td class="clic" onclick="openChantierModal(\''+c.id+'\')"><b>'+esc(c.ref)+'</b></td><td class="clic" onclick="openChantierModal(\''+c.id+'\')"><b>'+esc(c.client)+'</b></td><td style="font-size:12px">'+(techs.length?techs.map(esc).join(', '):'<span style="color:var(--muted)">—</span>')+'</td><td style="text-align:center">'+prev+' h</td><td style="text-align:center">'+plan+' h</td><td style="text-align:center;color:'+ec+';font-weight:700">'+(ecart>0?'+':'')+ecart+' h</td><td style="text-align:center;font-size:12px">'+(ld?new Date(ld+'T00:00:00').toLocaleDateString('fr-FR'):'—')+'</td><td style="white-space:nowrap">'+(c.statut==='termine'?'<span style="color:#1a7f3c;font-weight:600">✅ Terminé</span>':'<span style="color:#1d4ed8;font-weight:600">📤 Sorti</span>')+' <button class="small" title="Réactiver (remettre à planifier)" onclick="archiveReactiver(\''+c.id+'\')">↩</button></td></tr>'; }).join('');
+    html+='<div style="margin:18px 0 6px"><b style="font-size:16px;color:var(--bleu)">'+esc(lbl)+'</b> <span style="color:var(--muted);font-size:12px">— '+items.length+' chantier(s) · prévu '+(Math.round(tPrev*10)/10)+' h / planifié '+(Math.round(tPlan*10)/10)+' h</span></div>';
+    html+='<table class="grid"><thead><tr><th>Réf.</th><th>Client</th><th>Technicien(s)</th><th>H. prévues</th><th>H. planifiées</th><th>Écart</th><th>Dernière date</th><th>Statut</th></tr></thead><tbody>'+rows+'</tbody></table>'; });
+  wrap.innerHTML=html; }
 let editChId=null;
 function openChantierModal(id){ editChId=id||null; const c=id?db.chantiers.find(x=>x.id===id):null;
   document.getElementById('chModalTitle').textContent=c?'Modifier le chantier':'Nouveau chantier';
