@@ -217,6 +217,7 @@
   <button class="navlink" id="nav-com" onclick="showView('com')">🧑‍💼 Commerciaux</button>
   <button class="navlink" id="nav-fiches" onclick="showView('fiches')">🧾 Fiches techniciens</button>
   <button class="navlink" id="nav-archive" onclick="showView('archive')">🗄 Archive</button>
+  <button class="navlink" id="nav-cseadm" onclick="showView('cseadm')">🗳 CSE <span id="cseBadge" class="nav-badge"></span></button>
   <button class="navlink" id="nav-params" onclick="showView('params')">⚙ Paramètres</button>
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
@@ -234,11 +235,42 @@
     <button class="ghost small" onclick="weekShift(1)">▶</button>
     <button class="ghost small" onclick="showView('mon')">📱 Mon planning</button>
     <button class="ghost small" onclick="openColleaguesMap()">🗺 Carte</button>
+    <button class="ghost small" onclick="showView('cse')">💡 Boîte à idées CSE</button>
     <button class="ghost small" onclick="openQR()">🔳 QR code mobile</button>
     <button class="primary small" id="btnGestion" style="display:none" onclick="askAdminAccess()">🔧 Espace gestion</button>
     <button class="ghost small" id="btnLogoutPT" style="display:none" onclick="doLogout()" title="Se déconnecter">⎋ Déconnexion</button>
   </div>
   <div class="wrap wrap-full"><div id="planTechWrap"></div></div>
+</div>
+
+<!-- VUE TECHNICIEN : BOÎTE À IDÉES CSE -->
+<div class="view" id="view-cse">
+  <div style="position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--bord);display:flex;gap:8px;align-items:center;padding:10px 18px;flex-wrap:wrap">
+    <b style="color:var(--bleu)">ACF <span style="color:var(--rouge)">CHAPPERT</span> · Boîte à idées CSE</b>
+    <span style="flex:1"></span>
+    <button class="ghost small" onclick="showView('plantech')">◀ Retour au planning</button>
+  </div>
+  <div class="wrap" style="max-width:760px">
+    <div style="background:#fff;border:1px solid var(--bord);border-radius:12px;padding:20px 22px;margin-bottom:16px">
+      <h2 class="page-h" style="margin-top:0">💡 Proposer une idée</h2>
+      <p class="sub" style="margin-top:0">Votre idée sera transmise au CSE et pourra être présentée lors de la prochaine réunion.</p>
+      <div class="mfield"><label>Votre idée</label><textarea id="cseTexte" rows="7" maxlength="3000" placeholder="Décrivez votre idée, suggestion ou remarque…"></textarea></div>
+      <div class="mfield">
+        <label>Envoyer de manière</label>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:14px">
+          <label style="display:inline-flex;gap:6px;align-items:center;margin:0;color:inherit;font-size:14px;white-space:nowrap"><input type="radio" name="cseMode" value="anonyme" checked onchange="cseModeChange()" style="width:auto;margin:0"> Anonyme</label>
+          <label style="display:inline-flex;gap:6px;align-items:center;margin:0;color:inherit;font-size:14px;white-space:nowrap"><input type="radio" name="cseMode" value="nom" onchange="cseModeChange()" style="width:auto;margin:0"> En mon nom</label>
+          <select id="cseAuteur" style="display:none;width:auto;min-width:200px"></select>
+        </div>
+        <div id="cseModeHint" style="font-size:12px;color:var(--muted);margin-top:6px">🔒 Aucun nom n'est enregistré avec une idée anonyme.</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="primary" id="cseSendBtn" onclick="cseEnvoyer()">📨 Envoyer mon idée</button></div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bord);border-radius:12px;padding:20px 22px">
+      <h2 class="page-h" style="margin-top:0">📄 Compte rendu CSE</h2>
+      <button class="ghost" id="cseRapportBtn" disabled onclick="cseOuvrirDernierRapport()">Chargement…</button>
+    </div>
+  </div>
 </div>
 
 <!-- VUE MOBILE : MON PLANNING PERSONNEL -->
@@ -415,6 +447,35 @@
     <p class="sub">Chantiers terminés ou sortis de la liste, classés par mois de réalisation (dernière date planifiée), avec comparaison heures prévues / planifiées et techniciens assignés.</p>
     <div class="bar"><div class="search"><input id="searchArchive" placeholder="Rechercher par client ou réf…" oninput="renderArchive()"></div></div>
     <div id="archiveWrap"></div>
+  </div>
+</div>
+
+<!-- VUE CSE (gestion) -->
+<div class="view" id="view-cseadm">
+  <div class="wrap wrap-full">
+    <h2 class="page-h">CSE</h2>
+    <p class="sub">Idées déposées par les techniciens dans la boîte à idées, et dépôt du compte rendu de réunion CSE (visible par les techniciens).</p>
+    <div style="background:#fff;border:1px solid var(--bord);border-radius:12px;padding:16px 18px;margin-bottom:18px">
+      <h3 style="margin:0 0 10px;color:var(--bleu)">📄 Compte rendu de réunion</h3>
+      <div class="bar" style="margin-bottom:8px">
+        <input type="file" id="cseFile" accept=".pdf,.doc,.docx,.odt,.jpg,.jpeg,.png">
+        <button class="primary" onclick="cseDeposerRapport()">⬆ Déposer le compte rendu</button>
+        <span id="cseUpMsg" style="font-size:12px;color:var(--muted)">PDF conseillé · 7 Mo maximum</span>
+      </div>
+      <div id="cseRapportsList"></div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bord);border-radius:12px;padding:16px 18px">
+      <div class="bar" style="justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0;color:var(--bleu)">💡 Boîte à idées</h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="cseFiltre" onchange="renderCseAdm()" style="padding:6px 10px;border:1px solid var(--bord);border-radius:8px">
+            <option value="nouvelle">À présenter</option><option value="traitee">Traitées</option><option value="tout">Toutes</option>
+          </select>
+          <button class="ghost small" onclick="cseImprimer()">🖨 Imprimer pour la réunion</button>
+        </div>
+      </div>
+      <div id="cseIdeesList"></div>
+    </div>
   </div>
 </div>
 
@@ -774,7 +835,7 @@ const _urlTech=(new URLSearchParams(location.search)).get('tech');
 const techLinkMode=!!_urlTech;
 const techShareMode=!techLinkMode && !!(new URLSearchParams(location.search)).get('mob');
 const mobOnly=techLinkMode||techShareMode;
-function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,fiches:renderFiches,archive:renderArchive,params:renderParams}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
+function rerender(){ const v=currentView; const map={dash:renderDash,mon:renderMon,planning:renderPlanning,plantech:renderPlanTech,chantiers:renderChantiers,prev:renderPrev,propo:renderPropo,tech:renderTech,com:renderCom,fiches:renderFiches,archive:renderArchive,params:renderParams,cse:renderCse,cseadm:renderCseAdm}; try{ (map[v]||renderPlanTech)(); }catch(e){} try{ updateBadges(); }catch(e){} }
 function cloudInit(){
   if(!window.firebase||!FB_CONFIG.apiKey){ document.getElementById('loginBg').style.display='none'; setSyncStatus(''); return; }
   try{ firebase.initializeApp(FB_CONFIG); }catch(e){}
@@ -794,7 +855,7 @@ function onSignedIn(u){
     const localHas=(db.chantiers&&db.chantiers.length)||(db.techniciens&&db.techniciens.length);
     if(cloudHas){ db=fromCloud(v); migr(db); CLOUD_KEYS.forEach(k=>_shadow[k]=JSON.stringify(db[k])); }
     else { migr(db); pushAll(); }
-    cloudOn=true; persistLocal(); try{ autoFinishPastChantiers(); }catch(e){} setSyncStatus('ok'); if(mobOnly) showView('mon'); else showView(canEdit?'dash':'plantech');
+    cloudOn=true; persistLocal(); try{ cseInitListeners(); }catch(e){} try{ autoFinishPastChantiers(); }catch(e){} setSyncStatus('ok'); if(mobOnly) showView('mon'); else showView(canEdit?'dash':'plantech');
     CLOUD_KEYS.forEach(k=>{
       fbDb.ref('db/'+k).on('value', s=>{
         const val=s.val(); const js=JSON.stringify(LIST_KEYS.includes(k)?coerceList(val):(val==null?cloudDefault(k):val));
@@ -844,9 +905,13 @@ let adminUnlocked=false;
 function showView(v){
   if(mobOnly) v='mon';
   currentView=v;
-  ['plantech','mon','dash','planning','chantiers','prev','propo','tech','com','fiches','archive','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
-  document.getElementById('topnav').style.display=(v==='plantech'||v==='mon')?'none':'flex';
-  ['dash','planning','chantiers','prev','propo','tech','com','fiches','archive','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
+  if(v==='cseadm'&&!canEdit) v='plantech';
+  currentView=v;
+  ['plantech','mon','cse','dash','planning','chantiers','prev','propo','tech','com','fiches','archive','cseadm','params'].forEach(x=>document.getElementById('view-'+x).classList.toggle('active',x===v));
+  document.getElementById('topnav').style.display=(v==='plantech'||v==='mon'||v==='cse')?'none':'flex';
+  if(v==='cse') renderCse();
+  if(v==='cseadm') renderCseAdm();
+  ['dash','planning','chantiers','prev','propo','tech','com','fiches','archive','cseadm','params'].forEach(x=>{ const n=document.getElementById('nav-'+x); if(n) n.classList.toggle('active',v===x); });
   if(v==='dash') renderDash();
   if(v==='mon') renderMon();
   if(v==='planning') renderPlanning();
@@ -862,6 +927,106 @@ function showView(v){
   updateBadges(); window.scrollTo(0,0);
 }
 function askAdminAccess(){ if(canEdit){ showView('dash'); } else { alert('Ce compte est en lecture seule. Connectez-vous avec le compte gestion pour modifier le planning.'); } }
+
+/* ===== CSE : boîte à idées + comptes rendus =====
+   Stocké HORS du noeud "db" (pour que les idées ne soient pas lisibles par tous) :
+   cse/idees/{id}         {texte, auteur|null, date, etat:'nouvelle'|'traitee'}  -> création par tout connecté, lecture gestion
+   cse/rapportsMeta/{id}  {nom, date, taille}                                     -> lecture tous connectés, écriture gestion
+   cse/rapportsData/{id}  "data:..." (fichier en base64)                          -> idem */
+const CSE_MAX_BYTES=7*1024*1024;
+let cseIdees={}, cseRapports={}, cseDernier=null, _cseRefs=[];
+function cseFmtDate(ts){ return ts? new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''; }
+function cseFmtTaille(n){ n=n||0; return n>1048576? (n/1048576).toFixed(1).replace('.',',')+' Mo' : Math.max(1,Math.round(n/1024))+' Ko'; }
+function cseInitListeners(){
+  _cseRefs.forEach(r=>{ try{ r.off(); }catch(e){} }); _cseRefs=[]; cseIdees={}; cseRapports={}; cseDernier=null;
+  if(!fbDb||mobOnly) return;
+  const last=fbDb.ref('cse/rapportsMeta').orderByKey().limitToLast(1);
+  last.on('value', s=>{ const v=s.val()||{}; const k=Object.keys(v)[0]; cseDernier=k?Object.assign({id:k},v[k]):null; if(currentView==='cse') renderCse(); }, ()=>{ cseDernier=null; if(currentView==='cse') renderCse(); });
+  _cseRefs.push(last);
+  if(canEdit){
+    const ri=fbDb.ref('cse/idees'); ri.on('value', s=>{ cseIdees=s.val()||{}; cseUpdateBadge(); if(currentView==='cseadm') renderCseAdm(); }); _cseRefs.push(ri);
+    const rm=fbDb.ref('cse/rapportsMeta'); rm.on('value', s=>{ cseRapports=s.val()||{}; if(currentView==='cseadm') renderCseAdm(); }); _cseRefs.push(rm);
+  }
+}
+function cseUpdateBadge(){ const b=document.getElementById('cseBadge'); if(!b) return; const n=Object.values(cseIdees).filter(i=>i&&i.etat!=='traitee').length; b.textContent=n?String(n):''; b.style.display=n?'':'none'; }
+
+/* --- Page technicien --- */
+function cseModeChange(){ const nom=(document.querySelector('input[name="cseMode"]:checked')||{}).value==='nom';
+  const sel=document.getElementById('cseAuteur'); sel.style.display=nom?'':'none';
+  document.getElementById('cseModeHint').textContent = nom ? '👤 Votre nom sera visible par la direction et le CSE.' : '🔒 Aucun nom n\'est enregistré avec une idée anonyme.'; }
+function renderCse(){
+  const sel=document.getElementById('cseAuteur'); if(sel){ const cur=sel.value; sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(t=>'<option value="'+esc(t.id)+'"'+(t.id===cur?' selected':'')+'>'+esc(t.nom)+'</option>').join(''); }
+  const btn=document.getElementById('cseRapportBtn'); if(!btn) return;
+  if(!fbDb||!cloudOn){ btn.disabled=true; btn.textContent='Compte rendu indisponible hors connexion'; return; }
+  if(cseDernier){ btn.disabled=false; btn.className='primary'; btn.textContent='📄 Rapport CSE du '+cseFmtDate(cseDernier.date); }
+  else { btn.disabled=true; btn.className='ghost'; btn.textContent='Aucun compte rendu déposé pour le moment'; }
+}
+function cseEnvoyer(){
+  const txt=(document.getElementById('cseTexte').value||'').trim();
+  if(txt.length<3){ toast('Écrivez votre idée avant d\'envoyer.','err'); return; }
+  const nom=(document.querySelector('input[name="cseMode"]:checked')||{}).value==='nom';
+  let auteur=null; if(nom){ const id=document.getElementById('cseAuteur').value; if(!id){ toast('Choisissez votre nom, ou envoyez en anonyme.','err'); return; } auteur=techName(id)||null; }
+  if(!fbDb||!cloudOn){ toast('Envoi impossible : pas de connexion au serveur.','err'); return; }
+  // Idée anonyme : date arrondie au jour (pas d'heure précise, pour ne pas permettre de recouper)
+  const d=new Date(); if(!auteur) d.setHours(12,0,0,0);
+  const idee={texte:txt.slice(0,3000), auteur:auteur, date:d.getTime(), etat:'nouvelle'};
+  const b=document.getElementById('cseSendBtn'); b.disabled=true;
+  fbDb.ref('cse/idees').push(idee).then(()=>{
+    document.getElementById('cseTexte').value=''; toast('Merci ! Votre idée a bien été transmise au CSE.','ok');
+  }).catch(e=>{ toast('Envoi refusé par le serveur ('+(e.code||e.message||'erreur')+').','err'); }).finally(()=>{ b.disabled=false; });
+}
+function cseTelecharger(id, nom){
+  if(!fbDb) return; toast('Ouverture du compte rendu…');
+  fbDb.ref('cse/rapportsData/'+id).once('value').then(s=>{ const data=s.val(); if(!data){ toast('Fichier introuvable.','err'); return; }
+    fetch(data).then(r=>r.blob()).then(blob=>{ const url=URL.createObjectURL(blob);
+      if(/pdf|image/.test(blob.type)){ const w=window.open(url,'_blank'); if(w) { setTimeout(()=>URL.revokeObjectURL(url),60000); return; } }
+      const a=document.createElement('a'); a.href=url; a.download=nom||'compte-rendu-cse'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500); });
+  }).catch(e=>toast('Lecture impossible ('+(e.code||e.message||'erreur')+').','err'));
+}
+function cseOuvrirDernierRapport(){ if(cseDernier) cseTelecharger(cseDernier.id, cseDernier.nom); }
+
+/* --- Onglet gestion --- */
+function renderCseAdm(){
+  cseUpdateBadge();
+  const rl=document.getElementById('cseRapportsList'); if(!rl) return;
+  const reps=Object.entries(cseRapports).map(([id,r])=>Object.assign({id},r)).sort((a,b)=>(b.date||0)-(a.date||0));
+  rl.innerHTML = reps.length ? '<table style="width:100%;border-collapse:collapse;font-size:13px">'+reps.map((r,i)=>'<tr style="border-top:1px solid var(--bord)"><td style="padding:7px 4px;white-space:nowrap"><b>Rapport CSE du '+cseFmtDate(r.date)+'</b>'+(i===0?' <span class="tag" style="background:#dcfce7;color:#166534">visible par les techniciens</span>':'')+'</td><td style="padding:7px 4px;color:var(--muted)">'+esc(r.nom)+' · '+cseFmtTaille(r.taille)+'</td><td style="padding:7px 4px;text-align:right;white-space:nowrap"><button class="ghost small" onclick="cseTelecharger(\''+r.id+'\',\''+esc(r.nom).replace(/'/g,"\\'")+'\')">Ouvrir</button> <button class="ghost small" onclick="cseSupprRapport(\''+r.id+'\')">🗑</button></td></tr>').join('')+'</table>'
+    : '<div style="color:var(--muted);font-size:13px">Aucun compte rendu déposé.</div>';
+  const filtre=(document.getElementById('cseFiltre')||{}).value||'nouvelle';
+  const ids=Object.entries(cseIdees).map(([id,x])=>Object.assign({id},x)).filter(x=>filtre==='tout'||(filtre==='traitee'?x.etat==='traitee':x.etat!=='traitee')).sort((a,b)=>(b.date||0)-(a.date||0));
+  const il=document.getElementById('cseIdeesList');
+  il.innerHTML = ids.length ? ids.map(x=>'<div style="border:1px solid var(--bord);border-radius:10px;padding:10px 12px;margin-bottom:8px;'+(x.etat==='traitee'?'opacity:.6;':'')+'">'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12px"><span class="tag" style="background:'+(x.auteur?'#dbeafe;color:#1e3a8a':'#f1f5f9;color:#475569')+'">'+(x.auteur?'👤 '+esc(x.auteur):'🔒 Anonyme')+'</span><span style="color:var(--muted)">'+cseFmtDate(x.date)+'</span>'+(x.etat==='traitee'?'<span class="tag" style="background:#dcfce7;color:#166534">Traitée</span>':'')
+      +'<span style="flex:1"></span><button class="ghost small" onclick="cseBasculer(\''+x.id+'\')">'+(x.etat==='traitee'?'↺ Remettre à présenter':'✔ Marquer traitée')+'</button><button class="ghost small" onclick="cseSupprIdee(\''+x.id+'\')">🗑</button></div>'
+      +'<div style="white-space:pre-wrap;font-size:14px">'+esc(x.texte)+'</div></div>').join('')
+    : '<div class="empty" style="padding:24px">'+(filtre==='nouvelle'?'Aucune idée à présenter.':'Aucune idée.')+'</div>';
+}
+function cseBasculer(id){ const x=cseIdees[id]; if(!x||!fbDb) return; fbDb.ref('cse/idees/'+id+'/etat').set(x.etat==='traitee'?'nouvelle':'traitee').catch(e=>toast('Erreur : '+(e.code||e.message),'err')); }
+function cseSupprIdee(id){ if(!fbDb||!confirm('Supprimer définitivement cette idée ?')) return; fbDb.ref('cse/idees/'+id).remove().catch(e=>toast('Erreur : '+(e.code||e.message),'err')); }
+function cseSupprRapport(id){ const r=cseRapports[id]; if(!fbDb||!confirm('Supprimer définitivement le compte rendu du '+cseFmtDate(r&&r.date)+' ?')) return;
+  const u={}; u['cse/rapportsMeta/'+id]=null; u['cse/rapportsData/'+id]=null; fbDb.ref().update(u).then(()=>toast('Compte rendu supprimé.','ok')).catch(e=>toast('Erreur : '+(e.code||e.message),'err')); }
+function cseDeposerRapport(){
+  const inp=document.getElementById('cseFile'); const f=inp.files&&inp.files[0]; const msg=document.getElementById('cseUpMsg');
+  if(!f){ toast('Choisissez un fichier.','err'); return; }
+  if(f.size>CSE_MAX_BYTES){ toast('Fichier trop lourd ('+cseFmtTaille(f.size)+'). Maximum 7 Mo.','err'); return; }
+  if(!fbDb||!cloudOn){ toast('Pas de connexion au serveur.','err'); return; }
+  msg.textContent='Envoi en cours…';
+  const r=new FileReader(); r.onload=ev=>{
+    const id=fbDb.ref('cse/rapportsMeta').push().key; const u={};
+    u['cse/rapportsData/'+id]=ev.target.result; u['cse/rapportsMeta/'+id]={nom:f.name, date:Date.now(), taille:f.size};
+    fbDb.ref().update(u).then(()=>{ inp.value=''; msg.textContent='PDF conseillé · 7 Mo maximum'; toast('Compte rendu déposé : visible par les techniciens.','ok'); })
+      .catch(e=>{ msg.textContent='Échec de l\'envoi.'; toast('Erreur : '+(e.code||e.message),'err'); });
+  }; r.readAsDataURL(f);
+}
+function cseImprimer(){
+  const ids=Object.values(cseIdees).filter(x=>x&&x.etat!=='traitee').sort((a,b)=>(a.date||0)-(b.date||0));
+  if(!ids.length){ toast('Aucune idée à présenter.'); return; }
+  const w=window.open('','_blank'); if(!w) return;
+  w.document.write('<!doctype html><meta charset="utf-8"><title>Boîte à idées CSE</title><style>body{font-family:Arial,sans-serif;margin:30px;color:#1f2733}h1{color:#1b3a8c;font-size:20px;margin:0}h1 span{color:#e2231a}.s{color:#64748b;font-size:12px;margin:4px 0 20px}.i{border:1px solid #d9dee7;border-radius:8px;padding:10px 12px;margin-bottom:10px;page-break-inside:avoid}.m{font-size:12px;color:#64748b;margin-bottom:5px}.t{white-space:pre-wrap;font-size:14px}</style>'
+    +'<h1>ACF <span>CHAPPERT</span> · Boîte à idées CSE</h1><div class="s">'+ids.length+' idée(s) à présenter · imprimé le '+cseFmtDate(Date.now())+'</div>'
+    +ids.map((x,i)=>'<div class="i"><div class="m"><b>#'+(i+1)+'</b> · '+(x.auteur?esc(x.auteur):'Anonyme')+' · '+cseFmtDate(x.date)+'</div><div class="t">'+esc(x.texte)+'</div></div>').join(''));
+  w.document.close(); setTimeout(()=>w.print(),300);
+}
 
 /* ===== Techniciens ===== */
 const ROLE_LBL={montage:'Montage',apprenti:'Apprenti',sav:'SAV',entretien:'Entretien',bureau:'Bureau'};
