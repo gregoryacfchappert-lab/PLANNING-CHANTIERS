@@ -430,7 +430,7 @@
 <div class="view" id="view-fiches">
   <div class="wrap wrap-full">
     <h2 class="page-h">Fiches techniciens</h2>
-    <p class="sub">Récap hebdomadaire saisi par chaque technicien (repas extérieur, heures supp, astreinte du samedi) pour préparer les variables de paie.</p>
+    <p class="sub">Récap hebdomadaire saisi par chaque technicien (indemnité gamelle, heures supp, astreinte du samedi) pour préparer les variables de paie.</p>
     <div class="bar" style="align-items:flex-end">
       <div class="mfield" style="flex:0 0 200px;margin:0"><label style="font-size:12px;color:var(--muted)">Mois</label><select id="fichesMonth" onchange="renderFiches()"></select></div>
       <button class="primary" onclick="exportFichesZip()">📦 Exporter le mois (ZIP : Excel + PDF)</button>
@@ -1579,8 +1579,8 @@ function closeFiche(){ document.getElementById('ficheBg').classList.remove('open
 function buildFicheForm(){ const {techId, weekStart}=ficheCtx; const t=db.techniciens.find(x=>x.id===techId)||{}; const isAstr=!!t.astreinte;
   const mon=new Date(weekStart+'T00:00:00'); const f=getFiche(techId,weekStart)||blankFiche(weekStart);
   document.getElementById('ficheTitle').textContent='Fiche — '+(t.nom||'')+' — semaine du '+mon.toLocaleDateString('fr-FR');
-  let h='<div style="color:var(--muted);font-size:12px;margin-bottom:8px">Cochez les repas pris à l\'extérieur et indiquez vos heures supplémentaires par jour.</div>';
-  h+='<table class="grid" style="font-size:13px"><thead><tr><th>Jour</th><th>Chantier(s)</th><th>Repas ext.</th><th>H. supp</th></tr></thead><tbody>';
+  let h='<div style="color:var(--muted);font-size:12px;margin-bottom:8px">Cochez les jours donnant droit à l\'indemnité gamelle et indiquez vos heures supplémentaires par jour.</div>';
+  h+='<table class="grid" style="font-size:13px"><thead><tr><th>Jour</th><th>Chantier(s)</th><th>Indemnité gamelle</th><th>H. supp</th></tr></thead><tbody>';
   for(let i=0;i<6;i++){ const d=new Date(mon); d.setDate(d.getDate()+i); const ds=ymd(d); const day=(f.days&&f.days[ds])||{}; const chs=chantiersOfDay(ds,techId);
     h+='<tr><td><b>'+JOURS[i]+'</b><br><span style="color:var(--muted);font-size:11px">'+d.toLocaleDateString('fr-FR')+'</span></td>'+
        '<td style="font-size:12px">'+(chs.length?chs.map(esc).join('<br>'):'<span style="color:var(--muted)">—</span>')+'</td>'+
@@ -1628,7 +1628,7 @@ function openMesFiches(){ const myId=ficheMyId(); if(!myId){ alert('Sélectionne
   const wk=(db.fiches&&db.fiches[myId])||{}; const keys=Object.keys(wk).sort().reverse(); let h;
   if(!keys.length){ h='<div style="color:var(--muted);padding:10px 0">Aucune fiche enregistrée pour l\'instant. Remplissez « Ma fiche de la semaine ».</div>'; }
   else { h='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Vos fiches déjà enregistrées, en PDF téléchargeable.</div><div style="display:flex;flex-direction:column;gap:8px">'+keys.map(ws=>{ const f=wk[ws]; const mon=new Date(ws+'T00:00:00'); const sat=new Date(mon); sat.setDate(sat.getDate()+5); const rep=ficheWeekRepas(f); const sup=ficheWeekSupp(f); const sig=f.signature?'✅ signée':'⚠ non signée';
-    return '<div style="border:1px solid var(--bord);border-radius:10px;padding:10px"><b>Semaine n°'+isoWeek(mon)+' — du '+mon.toLocaleDateString('fr-FR')+' au '+sat.toLocaleDateString('fr-FR')+'</b><br><span style="font-size:12px;color:var(--muted)">'+rep+' repas · '+sup+' h supp'+(f.astreinte?' · astreinte '+(f.sortie||0)+'h':'')+' · '+sig+'</span><div style="margin-top:8px"><button class="primary small" onclick="downloadWeekPdf(\''+myId+'\',\''+ws+'\')">📄 Télécharger le PDF</button></div></div>'; }).join('')+'</div>'; }
+    return '<div style="border:1px solid var(--bord);border-radius:10px;padding:10px"><b>Semaine n°'+isoWeek(mon)+' — du '+mon.toLocaleDateString('fr-FR')+' au '+sat.toLocaleDateString('fr-FR')+'</b><br><span style="font-size:12px;color:var(--muted)">'+rep+' indemnité'+(rep>1?'s':'')+' gamelle · '+sup+' h supp'+(f.astreinte?' · astreinte '+(f.sortie||0)+'h':'')+' · '+sig+'</span><div style="margin-top:8px"><button class="primary small" onclick="downloadWeekPdf(\''+myId+'\',\''+ws+'\')">📄 Télécharger le PDF</button></div></div>'; }).join('')+'</div>'; }
   document.getElementById('mesFichesBody').innerHTML=h; document.getElementById('mesFichesBg').classList.add('open'); }
 function closeMesFiches(){ document.getElementById('mesFichesBg').classList.remove('open'); }
 /* ===== Gestion : onglet Fiches techniciens ===== */
@@ -1638,7 +1638,7 @@ function ficheMonthAgg(techId, month){ const wk=(db.fiches&&db.fiches[techId])||
 function renderFiches(){ const sel=document.getElementById('fichesMonth'); if(!sel) return; const months=monthsWithFiches(); const curVal=sel.value||monthKey(new Date()); sel.innerHTML=months.map(m=>'<option value="'+m+'"'+(m===curVal?' selected':'')+'>'+esc(capFirst(monthLabel(m)))+'</option>').join(''); const month=sel.value||curVal;
   const rows=db.techniciens.map(t=>Object.assign({t}, ficheMonthAgg(t.id,month)));
   const any=rows.some(r=>r.weeks.length);
-  let html='<table class="grid"><thead><tr><th>Technicien</th><th>Repas ext.</th><th>Heures supp</th><th>Astreinte (samedis)</th><th>H. sortie</th><th>Fiches hebdo (PDF)</th></tr></thead><tbody>';
+  let html='<table class="grid"><thead><tr><th>Technicien</th><th>Indemnité gamelle</th><th>Heures supp</th><th>Astreinte (samedis)</th><th>H. sortie</th><th>Fiches hebdo (PDF)</th></tr></thead><tbody>';
   rows.forEach(r=>{ const weeks=techActiveWeeks(r.t.id,month); const btns=weeks.length? weeks.map(ws=>{ const w=weekData(r.t.id,ws); const sig=w.signature?'✔':''; return '<button class="small primary" style="margin:2px" title="Semaine du '+w.mon.toLocaleDateString('fr-FR')+' au '+w.sat.toLocaleDateString('fr-FR')+'" onclick="openWeekPdf(\''+r.t.id+'\',\''+ws+'\')">📄 S'+w.wkNum+' '+sig+'</button>'; }).join('') : '<span style="color:var(--muted)">—</span>';
     html+='<tr><td><b>'+esc(r.t.nom)+'</b></td><td style="text-align:center">'+r.repas+'</td><td style="text-align:center">'+r.supp+' h</td><td style="text-align:center">'+(r.astrWeeks||'—')+'</td><td style="text-align:center">'+(r.sortie||0)+' h</td><td>'+btns+'</td></tr>'; });
   html+='</tbody></table>';
@@ -1677,14 +1677,14 @@ function buildWeekPdfDoc(techId, ws){ const { jsPDF }=window.jspdf; const t=db.t
   const doc=new jsPDF(); pdfHeader(doc,t); let y=32;
   doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(PDF_BLUE[0],PDF_BLUE[1],PDF_BLUE[2]);
   doc.text('Semaine n°'+w.wkNum+' — du '+w.mon.toLocaleDateString('fr-FR')+' au '+w.sat.toLocaleDateString('fr-FR'),14,y); doc.setTextColor(0,0,0); y+=8;
-  function thead(){ doc.setFillColor(PDF_BLUE[0],PDF_BLUE[1],PDF_BLUE[2]); doc.rect(14,y-5,182,7,'F'); doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('Jour',16,y); doc.text('Tâches / chantiers',48,y); doc.text('Repas',150,y); doc.text('H. supp',174,y); doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); y+=6; }
+  function thead(){ doc.setFillColor(PDF_BLUE[0],PDF_BLUE[1],PDF_BLUE[2]); doc.rect(14,y-5,182,7,'F'); doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('Jour',16,y); doc.text('Tâches / chantiers',48,y); doc.setFontSize(8); doc.text('Indemnité gamelle',141,y); doc.setFontSize(9); doc.text('H. supp',174,y); doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); y+=6; }
   thead();
-  w.days.forEach((d,i)=>{ const dd=new Date(d.ds+'T00:00:00'); const jour=d.jour.slice(0,3)+' '+dd.toLocaleDateString('fr-FR'); const taskLines=doc.splitTextToSize(d.tasks.length?d.tasks.join(' + '):'—',98); const rowH=Math.max(7, taskLines.length*4.6+2.5);
+  w.days.forEach((d,i)=>{ const dd=new Date(d.ds+'T00:00:00'); const jour=d.jour.slice(0,3)+' '+dd.toLocaleDateString('fr-FR'); const taskLines=doc.splitTextToSize(d.tasks.length?d.tasks.join(' + '):'—',92); const rowH=Math.max(7, taskLines.length*4.6+2.5);
     if(y+rowH>282){ doc.addPage(); y=20; thead(); }
     if(i%2===0){ doc.setFillColor(244,247,252); doc.rect(14,y-4.5,182,rowH,'F'); }
     doc.setFontSize(9); doc.text(jour,16,y); doc.text(taskLines,48,y); doc.text(d.repas||'—',152,y); doc.text(String(d.supp||0),178,y); y+=rowH; });
   y+=3; doc.setDrawColor(PDF_BLUE[0],PDF_BLUE[1],PDF_BLUE[2]); doc.setLineWidth(0.5); doc.line(14,y,196,y); doc.setLineWidth(0.2); doc.setDrawColor(0); y+=7;
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Total repas extérieur : '+w.repasTot,14,y); doc.text('Total heures supp : '+w.suppTot+' h',115,y); y+=7;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Total indemnités gamelle : '+w.repasTot,14,y); doc.text('Total heures supp : '+w.suppTot+' h',115,y); y+=7;
   if(t.astreinte||w.astreinte||w.sortie){ doc.text('Astreinte samedi : '+(w.astreinte?'Oui':'Non')+'      Heures de sortie astreinte : '+w.sortie+' h',14,y); y+=7; }
   doc.setFont('helvetica','normal'); y+=3;
   if(w.remarque){ doc.setFont('helvetica','bold'); doc.text('Remarque :',14,y); doc.setFont('helvetica','normal'); const lines=doc.splitTextToSize(w.remarque,180); doc.text(lines,14,y+5); y+=5+lines.length*5+3; }
@@ -1715,7 +1715,7 @@ function buildFichesWorkbook(month){ const monthLbl=capFirst(monthLabel(month));
   const pushRow=a=>{ A.push(a); return A.length-1; };
   let r0=pushRow(['RÉCAP HEURES — '+monthLbl+'   (base '+base+' h/semaine + heures supp)']); merges.push({s:{r:r0,c:0},e:{r:r0,c:7}}); cellStyles.push([r0,0,XL_TITLE]);
   pushRow([]);
-  const HEAD=['Semaine','Période','H. base','H. supp','Total heures','Repas ext.','Astreinte','H. sortie'];
+  const HEAD=['Semaine','Période','H. base','H. supp','Total heures','Indemnité gamelle','Astreinte','H. sortie'];
   let hr=pushRow(HEAD); for(let c=0;c<8;c++) cellStyles.push([hr,c,XL_HEAD]);
   let gB=0,gS=0,gT=0,gR=0,gA=0,gO=0;
   db.techniciens.forEach(t=>{ const weeks=techActiveWeeks(t.id,month); if(!weeks.length) return;
@@ -1728,17 +1728,17 @@ function buildFichesWorkbook(month){ const monthLbl=capFirst(monthLabel(month));
     for(let c=0;c<8;c++) cellStyles.push([tr,c,Object.assign({alignment:{horizontal:(c>=2?'center':'left'),vertical:'center'}}, XL_TOTROW)]);
     gB+=sB; gS+=sS; gT+=sT; gR+=sR; gA+=sA; gO+=sO; pushRow([]); });
   let gr=pushRow(['TOTAL GÉNÉRAL','', Math.round(gB*100)/100, Math.round(gS*100)/100, Math.round(gT*100)/100, gR, gA, Math.round(gO*100)/100]); for(let c=0;c<8;c++) cellStyles.push([gr,c,Object.assign({alignment:{horizontal:(c>=2?'center':'left'),vertical:'center'}},XL_TOTAL,{font:{bold:true,sz:12}})]);
-  const wsH=XLSX.utils.aoa_to_sheet(A); wsH['!cols']=[{wch:22},{wch:26},{wch:9},{wch:9},{wch:13},{wch:11},{wch:10},{wch:10}]; wsH['!merges']=merges;
+  const wsH=XLSX.utils.aoa_to_sheet(A); wsH['!cols']=[{wch:22},{wch:26},{wch:9},{wch:9},{wch:13},{wch:18},{wch:10},{wch:10}]; wsH['!merges']=merges;
   cellStyles.forEach(([r,c,s])=>xlCell(wsH,r,c,s)); XLSX.utils.book_append_sheet(wb, wsH, 'Récap heures');
   // 2) Totaux du mois (une ligne par technicien)
-  const tot=[['TOTAUX DU MOIS — '+monthLbl],[],['Technicien','Semaines','H. base','Heures supp.','Total heures','Repas ext.','Astreinte (sam.)','H. sortie']];
+  const tot=[['TOTAUX DU MOIS — '+monthLbl],[],['Technicien','Semaines','H. base','Heures supp.','Total heures','Indemnité gamelle','Astreinte (sam.)','H. sortie']];
   let tB=0,tS=0,tT=0,tR=0,tA=0,tO=0; db.techniciens.forEach(t=>{ const weeks=techActiveWeeks(t.id,month); if(!weeks.length) return; const r=techAgenda(t.id,month); const nb=weeks.length; const hb=nb*base; const th=Math.round((hb+r.suppTot)*100)/100; tot.push([t.nom, nb, hb, r.suppTot, th, r.repasTot, r.astrWeeks, r.sortieTot]); tB+=hb; tS+=r.suppTot; tT+=th; tR+=r.repasTot; tA+=r.astrWeeks; tO+=r.sortieTot; });
   tot.push(['TOTAL','', Math.round(tB*100)/100, Math.round(tS*100)/100, Math.round(tT*100)/100, tR, tA, Math.round(tO*100)/100]);
-  const wsT=XLSX.utils.aoa_to_sheet(tot); wsT['!cols']=[{wch:22},{wch:10},{wch:9},{wch:12},{wch:13},{wch:11},{wch:14},{wch:10}]; wsT['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}]; styleSheet(wsT,2,8,tot.length-1); for(let c=0;c<8;c++) xlCell(wsT,tot.length-1,c,XL_TOTAL); XLSX.utils.book_append_sheet(wb, wsT, 'Totaux mois');
+  const wsT=XLSX.utils.aoa_to_sheet(tot); wsT['!cols']=[{wch:22},{wch:10},{wch:9},{wch:12},{wch:13},{wch:18},{wch:14},{wch:10}]; wsT['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}]; styleSheet(wsT,2,8,tot.length-1); for(let c=0;c<8;c++) xlCell(wsT,tot.length-1,c,XL_TOTAL); XLSX.utils.book_append_sheet(wb, wsT, 'Totaux mois');
   // 3) Détail agenda
-  const detail=[['DÉTAIL AGENDA — '+monthLbl],[],['Technicien','Date','Jour','Tâches / chantiers','Repas ext.','Heures supp.']];
+  const detail=[['DÉTAIL AGENDA — '+monthLbl],[],['Technicien','Date','Jour','Tâches / chantiers','Indemnité gamelle','Heures supp.']];
   db.techniciens.forEach(t=>{ const r=techAgenda(t.id,month); r.days.forEach(d=>{ const dd=new Date(d.ds+'T00:00:00'); detail.push([t.nom, dd.toLocaleDateString('fr-FR'), JOURS[(dd.getDay()+6)%7], d.chantiers||'—', d.repas||'', d.supp||0]); }); });
-  const wsD=XLSX.utils.aoa_to_sheet(detail); wsD['!cols']=[{wch:20},{wch:12},{wch:10},{wch:60},{wch:10},{wch:12}]; wsD['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}}]; styleSheet(wsD,2,6,detail.length-1); XLSX.utils.book_append_sheet(wb, wsD, 'Détail');
+  const wsD=XLSX.utils.aoa_to_sheet(detail); wsD['!cols']=[{wch:20},{wch:12},{wch:10},{wch:60},{wch:18},{wch:12}]; wsD['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}}]; styleSheet(wsD,2,6,detail.length-1); XLSX.utils.book_append_sheet(wb, wsD, 'Détail');
   // 4) Remarques & signatures
   const remarks=[['REMARQUES & SIGNATURES — '+monthLbl],[],['Technicien','Semaine','Remarque','Signée']];
   db.techniciens.forEach(t=>{ techWeeksInMonth(t.id,month).forEach(w=>{ const mon=new Date(w.ws+'T00:00:00'); remarks.push([t.nom, 'du '+mon.toLocaleDateString('fr-FR'), w.remarque||'', w.signature?'Oui':'Non']); }); });
