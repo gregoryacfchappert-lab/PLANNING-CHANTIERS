@@ -222,7 +222,7 @@
   <span class="spacer"></span>
   <button class="ghost small" onclick="showView('plantech')">👁 Vue technicien</button>
   <button class="primary" onclick="openChantierModal()">＋ Nouveau chantier</button>
-  <span id="userBadge" style="display:none;align-items:center;gap:6px;margin-left:10px;font-size:12px;color:var(--muted)"><span class="sync-dot" id="syncDot"></span><span></span><button class="ghost small" onclick="doLogout()" title="Se déconnecter">⎋</button></span>
+  <span id="userBadge" style="display:none;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0"><span class="sync-dot" id="syncDot" style="flex-shrink:0"></span><span id="userEmail" style="white-space:nowrap"></span><button class="ghost small" onclick="doLogout()" title="Se déconnecter" style="white-space:nowrap;flex-shrink:0;line-height:1.2">🚪 Déconnexion</button></span>
 </div>
 
 <!-- VUE PLANNING TECHNICIEN (plein écran, lecture seule) -->
@@ -848,7 +848,7 @@ function onSignedIn(u){
   canEdit = !mobOnly && !!u.email && u.email.toLowerCase()===GESTION_EMAIL;
   const bg=document.getElementById('btnGestion'); if(bg) bg.style.display=canEdit?'inline-flex':'none';
   const lo=document.getElementById('btnLogoutPT'); if(lo) lo.style.display=(mobOnly||!u.email)?'none':'inline-flex';
-  const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; ub.querySelector('span').textContent=(u.email||'connecté')+(canEdit?'':' · lecture seule'); }
+  const ub=document.getElementById('userBadge'); if(mobOnly){ ub.style.display='none'; } else { ub.style.display='inline-flex'; document.getElementById('userEmail').textContent=(u.email||'connecté')+(canEdit?'':' · lecture seule'); }
   fbDb.ref('db').once('value').then(snap=>{
     const v=snap.val();
     const cloudHas=v&&((v.chantiers&&coerceList(v.chantiers).length)||(v.techniciens&&coerceList(v.techniciens).length));
