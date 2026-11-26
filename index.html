@@ -444,7 +444,7 @@
 <div class="view" id="view-archive">
   <div class="wrap wrap-full">
     <h2 class="page-h">Archive des chantiers</h2>
-    <p class="sub">Chantiers terminés ou sortis de la liste, classés par mois de réalisation (dernière date planifiée), avec comparaison heures prévues / planifiées et techniciens assignés.</p>
+    <p class="sub">Chantiers terminés (manuellement, ou automatiquement le lendemain de leur dernière date planifiée), classés par mois de réalisation (dernière date planifiée), avec comparaison heures prévues / planifiées et techniciens assignés.</p>
     <div class="bar"><div class="search"><input id="searchArchive" placeholder="Rechercher par client ou réf…" oninput="renderArchive()"></div></div>
     <div id="archiveWrap"></div>
   </div>
@@ -1147,12 +1147,14 @@ function matEtatBadge(c){ const et=c.matEtat||'non';
   return matAlertActive(c)?'<span class="alert-pill">⚠ À commander</span>':'<span style="color:var(--muted)">○ Non cmd</span>'; }
 function renderChantiers(){
   const q=(document.getElementById('searchChantier').value||'').toLowerCase();
-  let list=db.chantiers.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q));
+  autoFinishPastChantiers();
+  const actifs=db.chantiers.filter(c=>c.statut!=='termine'); // les chantiers terminés ne sont visibles que dans l'Archive
+  let list=actifs.filter(c=>(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)||(c.desc||'').toLowerCase().includes(q));
   if(chMatFilter==='cmd') list=list.filter(c=>(c.matEtat||'non')!=='non');
   else if(chMatFilter==='noncmd') list=list.filter(c=>(c.matEtat||'non')==='non');
   list=list.sort((a,b)=>{ const va=chantierSortVal(a,chantierSort.key), vb=chantierSortVal(b,chantierSort.key); const r=va<vb?-1:(va>vb?1:(refNum(a)-refNum(b))); return r*chantierSort.dir; });
   // Barre de filtres état matériel
-  const nTot=db.chantiers.length, nNon=db.chantiers.filter(c=>(c.matEtat||'non')==='non').length, nCmd=nTot-nNon;
+  const nTot=actifs.length, nNon=actifs.filter(c=>(c.matEtat||'non')==='non').length, nCmd=nTot-nNon;
   const fb=(key,lbl,n)=>`<button class="small${chMatFilter===key?' primary':''}" onclick="setMatFilter('${key}')">${lbl} (${n})</button>`;
   const fbar=document.getElementById('chMatFilter'); if(fbar) fbar.innerHTML='<span style="font-size:12px;color:var(--muted);margin-right:2px">Commande matériel :</span>'+fb('all','Tous',nTot)+fb('noncmd','🔸 Non commandés',nNon)+fb('cmd','📦 Commandés',nCmd);
   const w=document.getElementById('chantierTableWrap');
@@ -1195,7 +1197,7 @@ function archiveReactiver(id){ const c=db.chantiers.find(x=>x.id===id); if(!c) r
 function renderArchive(){ autoFinishPastChantiers();
   const wrap=document.getElementById('archiveWrap'); if(!wrap) return;
   const q=(document.getElementById('searchArchive').value||'').toLowerCase();
-  const arch=db.chantiers.filter(c=>(c.statut==='termine'||c.horsListe)&&(!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)));
+  const arch=db.chantiers.filter(c=>c.statut==='termine'&&(!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)));
   if(!arch.length){ wrap.innerHTML='<div class="empty">Aucun chantier archivé'+(q?' pour cette recherche.':' pour l\'instant. Les chantiers terminés ou sortis de la liste apparaîtront ici.')+'</div>'; return; }
   const byMonth={}; arch.forEach(c=>{ const ld=chLastPlanDate(c); const mk=ld?ld.slice(0,7):'sansdate'; (byMonth[mk]=byMonth[mk]||[]).push(c); });
   const months=Object.keys(byMonth).sort().reverse(); let html='';
