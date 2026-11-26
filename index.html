@@ -248,7 +248,7 @@
   <div style="position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--bord);display:flex;gap:8px;align-items:center;padding:10px 18px;flex-wrap:wrap">
     <b style="color:var(--bleu)">ACF <span style="color:var(--rouge)">CHAPPERT</span> · Boîte à idées CSE</b>
     <span style="flex:1"></span>
-    <button class="ghost small" onclick="showView('plantech')">◀ Retour au planning</button>
+    <button class="ghost small" onclick="cseRetour()">◀ Retour au planning</button>
   </div>
   <div class="wrap" style="max-width:760px">
     <div style="background:#fff;border:1px solid var(--bord);border-radius:12px;padding:20px 22px;margin-bottom:16px">
@@ -289,7 +289,7 @@
       <button id="monFicheBtn" class="primary small" style="flex:1" onclick="openFicheMob()">📝 Ma fiche de la semaine</button>
       <button class="ghost small" style="flex:0 0 auto;background:#fff" onclick="openMesFiches()">📂 Mes fiches</button>
     </div>
-    <button class="ghost small" style="width:100%;margin-top:8px;background:#fff" onclick="openColleaguesMap()">👥 Collègues à proximité</button>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost small" style="flex:1;background:#fff" onclick="openColleaguesMap()">👥 Collègues à proximité</button><button class="ghost small" style="flex:0 0 auto;background:#fff" onclick="showView('cse')">💡 CSE</button></div>
   </div>
   <div id="monBody" class="mon-body"></div>
 </div>
@@ -903,7 +903,8 @@ const GESTION_EMAIL='gestion@acfchappert.fr';
 let canEdit=false;
 let adminUnlocked=false;
 function showView(v){
-  if(mobOnly) v='mon';
+  if(mobOnly && v!=='cse') v='mon';
+  if(v==='cse' && currentView!=='cse') cseFrom=currentView;
   currentView=v;
   if(v==='cseadm'&&!canEdit) v='plantech';
   currentView=v;
@@ -939,7 +940,7 @@ function cseFmtDate(ts){ return ts? new Date(ts).toLocaleDateString('fr-FR',{day
 function cseFmtTaille(n){ n=n||0; return n>1048576? (n/1048576).toFixed(1).replace('.',',')+' Mo' : Math.max(1,Math.round(n/1024))+' Ko'; }
 function cseInitListeners(){
   _cseRefs.forEach(r=>{ try{ r.off(); }catch(e){} }); _cseRefs=[]; cseIdees={}; cseRapports={}; cseDernier=null;
-  if(!fbDb||mobOnly) return;
+  if(!fbDb) return;
   const last=fbDb.ref('cse/rapportsMeta').orderByKey().limitToLast(1);
   last.on('value', s=>{ const v=s.val()||{}; const k=Object.keys(v)[0]; cseDernier=k?Object.assign({id:k},v[k]):null; if(currentView==='cse') renderCse(); }, ()=>{ cseDernier=null; if(currentView==='cse') renderCse(); });
   _cseRefs.push(last);
@@ -951,11 +952,14 @@ function cseInitListeners(){
 function cseUpdateBadge(){ const b=document.getElementById('cseBadge'); if(!b) return; const n=Object.values(cseIdees).filter(i=>i&&i.etat!=='traitee').length; b.textContent=n?String(n):''; b.style.display=n?'':'none'; }
 
 /* --- Page technicien --- */
+let cseFrom='plantech';
+function cseRetour(){ showView(mobOnly?'mon':(cseFrom==='mon'?'mon':'plantech')); }
+function cseMonTechId(){ let id=''; if(techLinkMode) id=_urlTech; else { try{ id=localStorage.getItem('acf_montech')||''; }catch(e){} } return db.techniciens.some(t=>t.id===id)?id:''; }
 function cseModeChange(){ const nom=(document.querySelector('input[name="cseMode"]:checked')||{}).value==='nom';
   const sel=document.getElementById('cseAuteur'); sel.style.display=nom?'':'none';
   document.getElementById('cseModeHint').textContent = nom ? '👤 Votre nom sera visible par la direction et le CSE.' : '🔒 Aucun nom n\'est enregistré avec une idée anonyme.'; }
 function renderCse(){
-  const sel=document.getElementById('cseAuteur'); if(sel){ const cur=sel.value; sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(t=>'<option value="'+esc(t.id)+'"'+(t.id===cur?' selected':'')+'>'+esc(t.nom)+'</option>').join(''); }
+  const sel=document.getElementById('cseAuteur'); if(sel){ const cur=sel.value||cseMonTechId(); sel.innerHTML='<option value="">— Choisissez votre nom —</option>'+db.techniciens.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(t=>'<option value="'+esc(t.id)+'"'+(t.id===cur?' selected':'')+'>'+esc(t.nom)+'</option>').join(''); }
   const btn=document.getElementById('cseRapportBtn'); if(!btn) return;
   if(!fbDb||!cloudOn){ btn.disabled=true; btn.textContent='Compte rendu indisponible hors connexion'; return; }
   if(cseDernier){ btn.disabled=false; btn.className='primary'; btn.textContent='📄 Rapport CSE du '+cseFmtDate(cseDernier.date); }
