@@ -88,6 +88,7 @@
   .plan-layout{display:flex;gap:14px;align-items:flex-start;}
   .plan-banner{flex:0 0 250px;position:sticky;top:64px;max-height:80vh;overflow:auto;background:#fff;border:1px solid var(--bord);border-radius:12px;padding:10px;}
   .plan-banner h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--bleu);}
+  .plan-chip.dragging{opacity:.5;} body.plan-dragging,body.plan-dragging *{cursor:grabbing !important;}
   .ch-card{border:1px solid var(--bord);border-left-width:5px;border-radius:9px;padding:8px 10px;margin-bottom:8px;cursor:grab;background:#fff;}
   .ch-card:active{cursor:grabbing;} .ch-card.dragging{opacity:.5;}
   .ch-card .cc-nom{font-weight:700;} .ch-card .cc-meta{font-size:11px;color:var(--muted);margin-top:2px;}
@@ -1775,16 +1776,16 @@ function buildWeekTable(wkStart, ro){
     html+='<tr class="'+(ds===todayStr?'plan-today':'')+'"><td class="plan-day"><div class="dname">'+JOURS[i]+'</div><div class="ddate">'+d.toLocaleDateString('fr-FR')+(ferie?' · <b style="color:#64748b">Férié</b>':'')+'</div></td>';
     html+=db.techniciens.map(t=>{ const ps=posesOrdered(ds,t.id);
       if(ferie){ return '<td class="plan-cell plan-ferie"><div class="plan-chip" style="background:#cbd5e1;color:#334155;pointer-events:none"><b>Férié</b></div>'+ps.map(p=>{ const col=poseColor(p); const tc=(p.type==='chantier'?'#111':textOn(col)); const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`; return `<div class="plan-chip" style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(poseLabel(p))}</b></div>`; }).join('')+'</td>'; }
-      const cellAttr= ro?'' : `ondragover="cellOver(event)" ondragleave="cellLeave(event)" ondrop="cellDrop(event,'${ds}','${t.id}')" onclick="cellClick('${ds}','${t.id}')"`;
+      const cellAttr= ro?'' : `data-cell-ds="${ds}" data-cell-tech="${esc(t.id)}" onclick="cellClick('${ds}','${t.id}')"`;
       let defc=''; const role=t.role||'';
       if(!ps.length && (role==='sav'||role==='entretien')){ const w=d.getDay(); if(w>=1&&w<=5){ const sc=statusColor(role); defc=`<div class="plan-chip" style="background:${sc};color:${textOn(sc)};pointer-events:none"><b>${POSE_STATUS[role].label}</b></div>`; } }
       const inner=ps.map(p=>{ let col=poseColor(p); const dim=p.type==='astreinte'&&p.astreinteAuto&&weekHasManualAst; if(dim)col='#e5e7eb'; const tc=dim?'#9aa3af':(p.type==='chantier'?'#111':textOn(col));
         const titre=poseLabel(p); const sub=p.type==='astreinte'?'':(p.note||'');
         const repas=(p.type==='chantier')&&(p.repasExt||(p.chantierId&&(db.chantiers.find(c=>c.id===p.chantierId)||{}).repasExt));
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
-        const drag=(ro||p.type==='astreinte')?'':` draggable="true" ondragstart="event.stopPropagation();poseDragStart(event,'${p.id}')" ondragend="chDragEnd(event)"`;
+        const drag=(ro||p.type==='astreinte')?'':` data-drag="pose" data-id="${esc(p.id)}"`;
         const cr=(p.type==='chantier'&&p.creneau)?('<span class="cr-badge">🕐 '+esc(p.creneau)+'</span>'):'';
-        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${cr}${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
+        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="${drag?'touch-action:none;':''}background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${cr}${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
       }).join('')+defc;
       return ro ? `<td class="plan-cell plan-cell-ro"><div class="cell-fill">${inner}</div></td>` : `<td class="plan-cell" ${cellAttr}>${inner}<span class="addp">＋</span></td>`; }).join('');
     html+='</tr>'; }
@@ -1805,6 +1806,8 @@ function renderPlanning(){
   renderInfoEditor();
   renderTypeBanner(); renderBanner();
   document.getElementById('planGridWrap').innerHTML=buildGrid(false);
+  // Rendu pendant un glisser (molette, synchro) : source et case survolée remises
+  if(_pd&&_pd.active){ syncPlanSrc(); updatePlanHover(); }
 }
 function renderPlanTech(){ document.getElementById('planTechWrap').innerHTML=infoBannerHtml()+'<div class="legend" style="margin-bottom:10px">'+legendHtml()+'</div>'+buildGrid(true); }
 /* ===== Mon planning (mobile) ===== */
@@ -1855,7 +1858,7 @@ function renderBanner(){
   const list=chantiersToPlan().filter(c=>!q||(c.client||'').toLowerCase().includes(q)||(c.ref||'').toLowerCase().includes(q)).sort(planCmp);
   if(!list.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px">'+(q?'Aucun chantier trouvé.':'Aucun chantier à planifier.')+'</div>'; return; }
   box.innerHTML=list.map(c=>{ const placed=db.poses.some(p=>p.chantierId===c.id);
-    return `<div class="ch-card" draggable="true" style="border-left-color:${esc(chantierColor(c))}" ondragstart="chDragStart(event,'${c.id}')" ondragend="chDragEnd(event)">
+    return `<div class="ch-card" data-drag="ch" data-id="${esc(c.id)}" style="touch-action:none;border-left-color:${esc(chantierColor(c))}">
       <div class="cc-nom">${esc(c.client)} ${placed?'<span style="color:var(--vert)">✓</span>':''}</div>
       <div class="cc-meta">${esc(c.ref)} · ${chHoursTotal(c)} h · ${chMonths(c).length?chMonths(c).map(m=>esc(monthLabel(m))).join(', '):'mois ?'}${matTag(c)}</div>
       ${(c.techIds&&c.techIds.length)?`<div class="cc-meta" style="color:var(--bleu)">👷 ${c.techIds.map(id=>esc(techName(id))).filter(Boolean).join(', ')}</div>`:''}
@@ -1866,22 +1869,259 @@ function renderBanner(){
 const DRAG_TYPES=[['conge','Congé'],['maladie','Maladie'],['entretien','Entretien'],['sav','SAV'],['cours','Cours'],['autre','Autre']];
 function renderTypeBanner(){ const box=document.getElementById('typeBanner'); if(!box) return;
   box.innerHTML=DRAG_TYPES.map(([t,lbl])=>{ const col=statusColor(t);
-    return `<div class="ch-card" draggable="true" style="border-left-color:${col};padding:5px 9px;margin:0;font-size:12px;font-weight:600" ondragstart="typeDragStart(event,'${t}')" ondragend="chDragEnd(event)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:5px"></span>${lbl}</div>`; }).join(''); }
-/* Drag & drop */
+    return `<div class="ch-card" data-drag="type" data-type="${t}" style="touch-action:none;border-left-color:${col};padding:5px 9px;margin:0;font-size:12px;font-weight:600"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:5px"></span>${lbl}</div>`; }).join(''); }
+/* ===== Glisser-deposer (pointeurs, v1 l.1870-1892) =====
+   Pas de glisser natif : Chrome ne transmet pas la molette pendant un glisser natif.
+   Sources : [data-drag="ch|type|pose"] (data-id ou data-type). Cibles : [data-cell-ds][data-cell-tech].
+   dragChId / dragType / dragPoseId restent la source du glisser en cours. */
 let dragChId=null, dragType=null, dragPoseId=null;
-function chDragStart(e,id){ dragChId=id; dragType=null; dragPoseId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','CH:'+id);}catch(_){}
-  e.currentTarget.classList.add('dragging'); }
-function typeDragStart(e,t){ dragType=t; dragChId=null; dragPoseId=null; e.dataTransfer.effectAllowed='copy'; try{e.dataTransfer.setData('text/plain','TYPE:'+t);}catch(_){}
-  e.currentTarget.classList.add('dragging'); }
-function poseDragStart(e,id){ dragPoseId=id; dragChId=null; dragType=null; e.dataTransfer.effectAllowed='copyMove'; try{e.dataTransfer.setData('text/plain','POSE:'+id);}catch(_){} e.currentTarget.classList.add('dragging'); }
-function chDragEnd(e){ e.currentTarget.classList.remove('dragging'); dragChId=null; dragType=null; dragPoseId=null; }
-function cellOver(e){ if(!dragChId&&!dragType&&!dragPoseId) return; e.preventDefault(); if(dragPoseId&&e.dataTransfer){ try{ e.dataTransfer.dropEffect=(e.ctrlKey||e.metaKey)?'copy':'move'; }catch(_){} } e.currentTarget.classList.add('drop-hover'); }
-function cellLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
-function cellDrop(e,ds,techId){ e.preventDefault(); e.currentTarget.classList.remove('drop-hover'); const copy=!!(e.ctrlKey||e.metaKey);
-  if(dragPoseId){ if(copy) copyPose(dragPoseId,ds,techId); else movePose(dragPoseId,ds,techId); return; }
-  if(dragChId){ const id=dragChId; const res=placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id, ()=>{ if(res&&res.needCreneau) askCreneauFor([res.newId]); }),60); return; }
-  if(dragType){ placeType(dragType,ds,techId); return; }
-  const data=e.dataTransfer.getData('text/plain')||''; if(data.startsWith('POSE:')){ if(copy) copyPose(data.slice(5),ds,techId); else movePose(data.slice(5),ds,techId); } else if(data.startsWith('CH:')){ const id=data.slice(3); const res=placeChantier(id,ds,techId); setTimeout(()=>openSortirDialog(id, ()=>{ if(res&&res.needCreneau) askCreneauFor([res.newId]); }),60); } else if(data.startsWith('TYPE:')) placeType(data.slice(5),ds,techId); }
+let _pd=null;               // geste en cours : {el, kind, val, x0, y0, pid, active}
+let _pdX=0, _pdY=0;         // derniere position du curseur
+let _pdPreview=null;        // apercu qui suit le curseur
+let _pdSuppressClick=false; // ignore le clic qui suit un glisser
+let _pdArmT=null;
+let _pdCancel=null;         // glisser annule (Echap, blur, clic droit) : on attend le relachement {pid}
+let _pdScrollRaf=0;         // defilement automatique pres des bords
+const PLAN_DRAG_MIN=5;      // seuil (px) avant de considerer un glisser
+const PLAN_EDGE=48;         // zone (px) pres du bord haut/bas qui fait defiler la page
+function chDragStart(id){ dragChId=id; dragType=null; dragPoseId=null; }
+function typeDragStart(t){ dragType=t; dragChId=null; dragPoseId=null; }
+function poseDragStart(id){ dragPoseId=id; dragChId=null; dragType=null; }
+/* Remise a zero : source et classes d'etat */
+function chDragEnd(){
+  dragChId=null; dragType=null; dragPoseId=null;
+  document.querySelectorAll('.dragging,.drop-hover').forEach(n=>n.classList.remove('dragging','drop-hover'));
+}
+/* Survol d'une case : seulement pendant un glisser */
+function cellOver(cell){
+  if(!dragChId&&!dragType&&!dragPoseId) return;
+  cell.classList.add('drop-hover');
+}
+function cellLeave(cell){
+  cell.classList.remove('drop-hover');
+}
+/* Depot sur une case ; copy = Ctrl/Cmd maintenu (copie d'une pastille) */
+function cellDrop(ds,techId,copy){
+  if(dragPoseId){
+    if(copy) copyPose(dragPoseId,ds,techId); else movePose(dragPoseId,ds,techId);
+    return;
+  }
+  if(dragChId){
+    const id=dragChId;
+    const res=placeChantier(id,ds,techId);
+    setTimeout(()=>openSortirDialog(id,()=>{ if(res&&res.needCreneau) askCreneauFor([res.newId]); }),60);
+    return;
+  }
+  if(dragType) placeType(dragType,ds,techId);
+}
+/* Classe 'dragging' sur la source, si elle est encore dans le DOM */
+function syncPlanSrc(){
+  document.querySelectorAll('.dragging').forEach(n=>n.classList.remove('dragging'));
+  const s=_pd;
+  if(!s||!s.active) return;
+  document.querySelectorAll('[data-drag="'+s.kind+'"]').forEach(n=>{
+    if((s.kind==='type'?n.dataset.type:n.dataset.id)===s.val) n.classList.add('dragging');
+  });
+}
+/* Case sous le curseur : une seule classe drop-hover */
+function updatePlanHover(){
+  const el=document.elementFromPoint(_pdX,_pdY);
+  const cell=(el&&el.closest)?el.closest('[data-cell-ds]'):null;
+  document.querySelectorAll('.plan-cell.drop-hover').forEach(c=>{ if(c!==cell) cellLeave(c); });
+  if(cell) cellOver(cell);
+}
+/* Debut du glisser (au-dela du seuil) */
+function startPlanDrag(){
+  const s=_pd;
+  s.active=true;
+  if(s.kind==='ch') chDragStart(s.val);
+  else if(s.kind==='type') typeDragStart(s.val);
+  else poseDragStart(s.val);
+  syncPlanSrc();
+  const pv=document.createElement('div');
+  pv.className='plan-drag-preview';
+  pv.dataset.base=(s.el.querySelector('b,.cc-nom')||s.el).textContent.trim();
+  pv.textContent=pv.dataset.base;
+  Object.assign(pv.style,{position:'fixed',left:'0',top:'0',zIndex:'9999',pointerEvents:'none',maxWidth:'240px',
+    padding:'5px 9px',borderRadius:'8px',background:'var(--bleu,#1b3a8c)',color:'#fff',font:'600 13px system-ui,sans-serif',
+    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',boxShadow:'0 6px 18px rgba(0,0,0,.25)',opacity:'.92'});
+  document.body.appendChild(pv);
+  _pdPreview=pv;
+  // pas de selection de texte pendant le glisser
+  document.body.style.userSelect='none';
+  document.body.classList.add('plan-dragging');
+  const sel=window.getSelection&&window.getSelection();
+  if(sel) sel.removeAllRanges();
+}
+/* Pointerdown (delegation sur document) : boutons, champs et liens exclus */
+function planPointerDown(e){
+  _pdSuppressClick=false;
+  clearTimeout(_pdArmT);
+  // Nouvel appui : un relachement attendu apres annulation n'est jamais arrive
+  if(_pdCancel) endPlanCancelWait(false);
+  if(e.button!==0) return;
+  if(_pd){
+    // Geste precedent dont le pointerup a ete perdu : on l'abandonne sans deposer
+    if(e.pointerType==='mouse'||e.pointerId===_pd.pid) endPlanGesture(true);
+    else return; // autre doigt pendant un glisser tactile
+  }
+  if(e.target.closest('button,input,select,textarea,a,label')) return;
+  const el=e.target.closest('[data-drag]');
+  if(!el) return;
+  const kind=el.dataset.drag;
+  _pd={el,kind,val:kind==='type'?el.dataset.type:el.dataset.id,x0:e.clientX,y0:e.clientY,pid:e.pointerId,ptype:e.pointerType||'mouse',active:false};
+  _pdX=e.clientX; _pdY=e.clientY;
+  window.addEventListener('pointermove',planPointerMove);
+  window.addEventListener('pointerup',planPointerUp);
+  window.addEventListener('pointercancel',planPointerCancel);
+  window.addEventListener('keydown',planKey);
+  window.addEventListener('blur',cancelPlanGesture);
+  window.addEventListener('contextmenu',planContextMenu);
+  window.addEventListener('wheel',planWheel,{passive:false});
+  window.addEventListener('scroll',planScroll,true);
+}
+function planPointerMove(e){
+  if(!_pd||e.pointerId!==_pd.pid) return;
+  // Bouton deja relache sans pointerup recu : on arrete le geste, rien n'est depose
+  if(!(e.buttons&1)){ endPlanGesture(true); return; }
+  _pdX=e.clientX; _pdY=e.clientY;
+  if(!_pd.active){
+    if(Math.hypot(_pdX-_pd.x0,_pdY-_pd.y0)<PLAN_DRAG_MIN) return;
+    startPlanDrag();
+  }
+  if(_pdPreview){
+    _pdPreview.style.transform='translate('+(_pdX+14)+'px,'+(_pdY+14)+'px)';
+    // Ctrl/Cmd sur une pastille : copie
+    const cp=_pd.kind==='pose'&&(e.ctrlKey||e.metaKey);
+    const t=(cp?'+ Copie : ':'')+_pdPreview.dataset.base;
+    if(_pdPreview.textContent!==t) _pdPreview.textContent=t;
+  }
+  updatePlanHover();
+  if(!_pdScrollRaf) _pdScrollRaf=requestAnimationFrame(planAutoScroll);
+}
+function planPointerUp(e){
+  if(!_pd||e.pointerId!==_pd.pid) return;
+  try{
+    if(_pd.active){
+      _pdX=e.clientX; _pdY=e.clientY;
+      const el=document.elementFromPoint(_pdX,_pdY);
+      const cell=(el&&el.closest)?el.closest('[data-cell-ds]'):null;
+      if(cell) cellDrop(cell.dataset.cellDs,cell.dataset.cellTech,!!(e.ctrlKey||e.metaKey));
+    }
+  } finally {
+    endPlanGesture();
+  }
+}
+function planPointerCancel(e){
+  if(_pd&&e.pointerId===_pd.pid) endPlanGesture();
+}
+function planKey(e){
+  if(e.key==='Escape'&&_pd&&_pd.active) cancelPlanGesture();
+}
+/* Clic droit : a la souris, annule le glisser (sans menu) ; au toucher, appui long sans menu */
+function planContextMenu(e){
+  if(!_pd) return;
+  if(_pd.ptype!=='mouse'){ e.preventDefault(); return; }
+  if(_pd.active){ e.preventDefault(); cancelPlanGesture(); }
+  else endPlanGesture(true);
+}
+/* Molette pendant un glisser, hors de la grille : change aussi de semaine */
+function planWheel(e){
+  if(!_pd||!_pd.active) return;
+  const t=e.target;
+  if(t&&t.closest&&t.closest('#planGridWrap')) return; // deja gere par wheelWeek
+  wheelWeek(e);
+}
+/* La page defile (clavier, barre, defilement auto) : la case survolee suit */
+function planScroll(){
+  if(_pd&&_pd.active) updatePlanHover();
+}
+/* Defilement automatique quand le curseur approche du bord haut ou bas de la fenetre */
+function planAutoScroll(){
+  _pdScrollRaf=0;
+  if(!_pd||!_pd.active) return;
+  const h=window.innerHeight;
+  let dy=0;
+  if(_pdY<PLAN_EDGE) dy=-Math.min(24,Math.ceil((PLAN_EDGE-_pdY)/2));
+  else if(_pdY>h-PLAN_EDGE) dy=Math.min(24,Math.ceil((_pdY-(h-PLAN_EDGE))/2));
+  if(!dy) return;
+  const se=document.scrollingElement||document.documentElement;
+  const before=se.scrollTop;
+  window.scrollBy(0,dy);
+  if(se.scrollTop===before) return; // en butee
+  updatePlanHover();
+  _pdScrollRaf=requestAnimationFrame(planAutoScroll);
+}
+/* Annulation (Echap, perte du focus, clic droit) : fin du geste, puis le clic
+   du relachement a venir est ignore, quel que soit le delai. */
+function cancelPlanGesture(){
+  const was=!!(_pd&&_pd.active);
+  const pid=_pd?_pd.pid:null;
+  endPlanGesture(true);
+  if(!was) return;
+  _pdCancel={pid};
+  _pdSuppressClick=true;
+  document.body.style.userSelect='none';
+  window.addEventListener('pointerup',planCancelUp,true);
+  window.addEventListener('pointercancel',planCancelAbort,true);
+  window.addEventListener('pointermove',planCancelMove,true);
+}
+function planCancelUp(e){
+  if(_pdCancel&&e.pointerId===_pdCancel.pid) endPlanCancelWait(true);
+}
+function planCancelAbort(e){
+  if(_pdCancel&&e.pointerId===_pdCancel.pid) endPlanCancelWait(false);
+}
+function planCancelMove(e){
+  // Bouton relache hors de la page (pointerup perdu) : plus de clic a attendre
+  if(_pdCancel&&e.pointerId===_pdCancel.pid&&!(e.buttons&1)) endPlanCancelWait(false);
+}
+function endPlanCancelWait(armClick){
+  window.removeEventListener('pointerup',planCancelUp,true);
+  window.removeEventListener('pointercancel',planCancelAbort,true);
+  window.removeEventListener('pointermove',planCancelMove,true);
+  _pdCancel=null;
+  document.body.style.userSelect='';
+  clearTimeout(_pdArmT);
+  if(armClick){
+    // le clic suit immediatement le pointerup
+    _pdSuppressClick=true;
+    _pdArmT=setTimeout(()=>{ _pdSuppressClick=false; },400);
+  } else _pdSuppressClick=false;
+}
+/* Fin du geste : listeners retires, etat reinitialise, apercu supprime.
+   Si un glisser a eu lieu (et sauf silent), le clic qui suit est ignore. */
+function endPlanGesture(silent){
+  const was=!!(_pd&&_pd.active);
+  window.removeEventListener('pointermove',planPointerMove);
+  window.removeEventListener('pointerup',planPointerUp);
+  window.removeEventListener('pointercancel',planPointerCancel);
+  window.removeEventListener('keydown',planKey);
+  window.removeEventListener('blur',cancelPlanGesture);
+  window.removeEventListener('contextmenu',planContextMenu);
+  window.removeEventListener('wheel',planWheel,{passive:false});
+  window.removeEventListener('scroll',planScroll,true);
+  if(_pdScrollRaf){ cancelAnimationFrame(_pdScrollRaf); _pdScrollRaf=0; }
+  _pd=null;
+  chDragEnd();
+  if(_pdPreview){ _pdPreview.remove(); _pdPreview=null; }
+  document.body.style.userSelect='';
+  document.body.classList.remove('plan-dragging');
+  if(was&&silent!==true){
+    _pdSuppressClick=true;
+    clearTimeout(_pdArmT);
+    _pdArmT=setTimeout(()=>{ _pdSuppressClick=false; },400);
+  }
+}
+document.addEventListener('pointerdown',planPointerDown);
+// Capture : le clic qui suit un glisser n'atteint pas la pastille ou la case
+window.addEventListener('click',e=>{
+  if(!_pdSuppressClick) return;
+  _pdSuppressClick=false;
+  e.stopPropagation(); e.preventDefault();
+},true);
+// Pas de glisser natif (texte sélectionné) pendant un geste sur une source, ni apres une annulation
+document.addEventListener('dragstart',e=>{ if(_pd||_pdCancel) e.preventDefault(); });
 function copyPose(id,ds,techId){ const p=db.poses.find(x=>x.id===id); if(!p){ dragPoseId=null; return; }
   const exists=db.poses.some(x=>x.type===p.type&&x.date===ds&&x.techId===techId&&(p.chantierId?x.chantierId===p.chantierId:(x.label||'')===(p.label||'')));
   if(exists){ dragPoseId=null; toast('Déjà présent sur cette case','ok'); return; }
