@@ -107,7 +107,7 @@
   .plan-fit .plan-chip{white-space:normal;word-break:break-word;}
   .plan-cell.drop-hover{background:var(--bleu-clair);box-shadow:inset 0 0 0 2px var(--bleu);}
   .plan-chip{border-radius:6px;padding:4px 8px;font-size:13px;margin-bottom:3px;cursor:pointer;line-height:1.3;overflow:hidden;font-weight:600;position:relative;}
-  .plan-chip.has-repas{padding-right:22px;} .repas-badge{position:absolute;top:2px;right:3px;font-size:14px;line-height:1;filter:drop-shadow(0 0 1px rgba(255,255,255,.9));}
+  .repas-badge{display:block;margin-top:3px;padding:1px 2px;border-radius:4px;background:#ea580c;color:#fff;font-size:9.5px;font-weight:800;line-height:1.25;letter-spacing:0;text-align:center;white-space:normal;overflow-wrap:anywhere;box-shadow:0 0 0 1px rgba(255,255,255,.7);}
   /* Vue technicien : chantier occupe toute la case, divisée si plusieurs */
   td.plan-cell-ro{height:82px;padding:3px;}
   .plan-cell-ro .cell-fill{display:flex;flex-direction:column;gap:3px;min-height:76px;height:100%;}
@@ -578,7 +578,7 @@
   </div>
   <div class="mfield"><label>Note / description (visible par le technicien)</label><textarea id="chDesc" rows="2"></textarea></div>
   <div class="mfield"><label>Lien internet (optionnel)</label><input id="chLien" type="url" placeholder="https://…"></div>
-  <div class="mfield"><label><input type="checkbox" id="chRepas" style="margin-right:7px;vertical-align:-1px">🍽 Repas à l'extérieur (affiche un symbole sur le planning du technicien)</label></div>
+  <div class="mfield"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--txt,inherit)"><input type="checkbox" id="chRepas" style="width:auto;margin:0;flex:0 0 auto;transform:scale(1.15)">🍴 Repas à l'extérieur (affiche un symbole sur le planning du technicien)</label></div>
   <div class="mfield"><label>Fichiers joints (devis, plans, photos — PDF ou images, plusieurs possibles)</label>
     <button class="ghost small" onclick="document.getElementById('chFilesInput').click()">📎 Joindre des fichiers</button>
     <input type="file" id="chFilesInput" accept="application/pdf,image/*" multiple style="display:none" onchange="attachFiles(event)">
@@ -728,7 +728,7 @@
   <div class="mfield"><label>Technicien</label><select id="taskTech"></select></div>
   <div class="mfield" id="taskComRow" style="display:none"><label>Commercial (couleur de la case)</label><select id="taskCom"></select></div>
   <div class="mfield" id="taskCreneauRow" style="display:none"><label>🕐 Créneau horaire (optionnel — ex : Matin, Après-midi, 8h–12h)</label><input id="taskCreneau" placeholder="Toute la journée si vide"></div>
-  <div class="mfield" id="taskRepasRow" style="display:none"><label><input type="checkbox" id="taskRepas" style="margin-right:7px;vertical-align:-1px">🍽 Repas à l'extérieur (affiche le symbole sur la case)</label></div>
+  <div class="mfield" id="taskRepasRow" style="display:none"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--txt,inherit)"><input type="checkbox" id="taskRepas" style="width:auto;margin:0;flex:0 0 auto;transform:scale(1.15)">🍴 Repas à l'extérieur (affiche le symbole sur la case)</label></div>
   <div class="mfield"><label>Note</label><input id="taskNote"></div>
   <div class="mfield" id="taskAddRow" style="display:none"><label>Ajouter d'autres techniciens à ce chantier (mêmes jours)</label>
     <div id="taskAddTechs" style="display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--bord);border-radius:8px;padding:8px;max-height:110px;overflow:auto;margin-bottom:6px"></div>
@@ -1785,7 +1785,7 @@ function buildWeekTable(wkStart, ro){
         const clic= ro?`openPoseRO('${p.id}')`:`event.stopPropagation();poseClick('${p.id}')`;
         const drag=(ro||p.type==='astreinte')?'':` data-drag="pose" data-id="${esc(p.id)}"`;
         const cr=(p.type==='chantier'&&p.creneau)?('<span class="cr-badge">🕐 '+esc(p.creneau)+'</span>'):'';
-        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="${drag?'touch-action:none;':''}background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${cr}${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">🍽</span>':''}</div>`;
+        return `<div class="plan-chip${dim?' dimmed':''}${repas?' has-repas':''}"${drag} style="${drag?'touch-action:none;':''}background:${col};color:${tc}" onclick="${clic}"><b>${esc(titre)}</b>${cr}${sub?esc(sub.slice(0,30)):''}${repas?'<span class="repas-badge" title="Repas à l\'extérieur">REPAS EXT.</span>':''}</div>`;
       }).join('')+defc;
       return ro ? `<td class="plan-cell plan-cell-ro"><div class="cell-fill">${inner}</div></td>` : `<td class="plan-cell" ${cellAttr}>${inner}<span class="addp">＋</span></td>`; }).join('');
     html+='</tr>'; }
